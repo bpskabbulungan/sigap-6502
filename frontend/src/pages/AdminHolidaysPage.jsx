@@ -20,6 +20,12 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useDocumentTitle } from "../utils/useDocumentTitle.js";
+import {
+  compareAppDates,
+  isValidAppDate,
+  normalizeAppDate,
+  parseAppDate,
+} from "../lib/dateFormatter";
 
 const ID_FMT = new Intl.DateTimeFormat("id-ID", {
   weekday: "short",
@@ -35,23 +41,25 @@ const accentActionButtonClasses = clsx(
   "disabled:opacity-60"
 );
 
-function parseISODate(d) {
-  // memastikan local midnight untuk stabilitas label relatif
-  return new Date(`${d}T00:00:00`);
+function sanitizeInput(value) {
+  return value.replace(/[/.]/g, "-").slice(0, 10);
 }
+
 function formatID(d) {
   try {
-    return ID_FMT.format(parseISODate(d));
+    const parsed = parseAppDate(d);
+    return parsed ? ID_FMT.format(parsed) : d;
   } catch {
     return d;
   }
 }
 function relativeLabel(d) {
   try {
-    const dt = parseISODate(d);
+    const dt = parseAppDate(d);
+    if (!dt) return "";
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diff = Math.round((dt - today) / 86400000); // hari
+    today.setUTCHours(0, 0, 0, 0);
+    const diff = Math.round((dt.getTime() - today.getTime()) / 86400000); // hari
     if (diff === 0) return "Hari ini";
     if (diff === 1) return "Besok";
     if (diff === -1) return "Kemarin";
@@ -60,11 +68,6 @@ function relativeLabel(d) {
   } catch {
     return "";
   }
-}
-function isValidISODate(d) {
-  return (
-    /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(parseISODate(d).valueOf())
-  );
 }
 
 export default function AdminHolidaysPage() {
@@ -105,8 +108,16 @@ export default function AdminHolidaysPage() {
 
   useEffect(() => {
     if (calendar) {
-      setHolidays([...(calendar.LIBURAN ?? [])].sort());
-      setJointLeaves([...(calendar.CUTI_BERSAMA ?? [])].sort());
+      const normalizedHolidays = (calendar.LIBURAN ?? [])
+        .map(normalizeAppDate)
+        .filter(Boolean)
+        .sort(compareAppDates);
+      const normalizedJoint = (calendar.CUTI_BERSAMA ?? [])
+        .map(normalizeAppDate)
+        .filter(Boolean)
+        .sort(compareAppDates);
+      setHolidays(normalizedHolidays);
+      setJointLeaves(normalizedJoint);
       setHolidayInput("");
       setJointLeaveInput("");
       setFormError("");
@@ -116,15 +127,16 @@ export default function AdminHolidaysPage() {
   }, [calendarResponse?.calendar]);
 
   const pushSortedUnique = (list, setter, value) => {
-    if (!isValidISODate(value)) {
-      setFormError("Format tanggal tidak valid. Gunakan YYYY-MM-DD.");
+    const normalized = normalizeAppDate(value);
+    if (!normalized || !isValidAppDate(normalized)) {
+      setFormError("Format tanggal tidak valid. Gunakan DD-MM-YYYY.");
       return null;
     }
-    if (list.includes(value)) {
+    if (list.includes(normalized)) {
       setFormError("Tanggal tersebut sudah ada di daftar.");
       return null;
     }
-    const next = [...list, value].sort();
+    const next = [...list, normalized].sort(compareAppDates);
     setter(next);
     setFormError("");
     return next;
@@ -594,16 +606,19 @@ export default function AdminHolidaysPage() {
               <Input
                 id="date-input"
                 ref={addInputRef}
-                type="date"
+                type="text"
+                inputMode="numeric"
+                pattern="\\d{2}-\\d{2}-\\d{4}"
+                placeholder="dd-mm-yyyy"
+                maxLength={10}
                 value={
                   activeTab === "holidays" ? holidayInput : jointLeaveInput
                 }
                 onChange={(e) =>
                   activeTab === "holidays"
-                    ? setHolidayInput(e.target.value)
-                    : setJointLeaveInput(e.target.value)
+                    ? setHolidayInput(sanitizeInput(e.target.value))
+                    : setJointLeaveInput(sanitizeInput(e.target.value))
                 }
-                min="2020-01-01"
                 required
                 className="hide-native-date-icon rounded-lg border-slate-700 bg-slate-900/60 pr-10"
               />

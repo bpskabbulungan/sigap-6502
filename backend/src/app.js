@@ -14,9 +14,9 @@ function buildAllowedOrigins() {
     config.webAppUrl,
     `http://localhost:${config.port}`,
     `http://127.0.0.1:${config.port}`,
+    config.socket.corsOrigin && config.socket.corsOrigin !== '*' ? config.socket.corsOrigin : null,
     ...config.socket.allowedOrigins,
   ].filter(Boolean));
-  if (config.socket.corsOrigin === '*') origins.add('*');
   return origins;
 }
 

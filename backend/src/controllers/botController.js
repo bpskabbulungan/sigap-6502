@@ -14,10 +14,10 @@ const { TIMEZONE } = require("../utils/calendar");
 
 const BOT_VERBOSE_LOGS = process.env.BOT_VERBOSE_LOGS !== "false";
 
-const logAdmin = (message, level = "info") =>
-  addLog(message, level, { audience: LOG_AUDIENCES.ADMIN });
-const logPublic = (message, level = "info") =>
-  addLog(message, level, { audience: LOG_AUDIENCES.PUBLIC });
+const logAdmin = (message, level = "info", options = {}) =>
+  addLog(message, level, { audience: options.audience || LOG_AUDIENCES.ADMIN, ...options });
+const logPublic = (message, level = "info", options = {}) =>
+  addLog(message, level, { audience: options.audience || LOG_AUDIENCES.PUBLIC, ...options });
 
 let client = null;
 let latestQR = null;
@@ -48,13 +48,11 @@ function armReadyDeadline(label) {
       if (isClientReady) return;
 
       logAdmin(
-        `[Sistem] ⚠️ Ready timeout (${label}) setelah ${Math.round(
+        `[Sistem] Ready timeout (${label}) setelah ${Math.round(
           ms / 1000
         )} detik tanpa progres. Restarting bot...`
       );
-      logPublic(
-        "[Sistem] ⚠️ Bot belum siap, mencoba restart otomatis untuk melanjutkan."
-      );
+      logPublic("[Sistem] Bot belum siap, mencoba restart otomatis untuk melanjutkan.");
       updateBotStatus({ active: false, phase: "restarting" });
 
       (async () => {
@@ -66,7 +64,7 @@ function armReadyDeadline(label) {
           );
           await startBot();
         } catch (e) {
-          logAdmin(`[Sistem] ❌ Gagal restart setelah timeout: ${e.message}`);
+          logAdmin(`[Sistem] Gagal restart setelah timeout: ${e.message}`);
         } finally {
           isRestarting = false;
         }
@@ -113,7 +111,7 @@ function getBotStatus() {
 // --- Core ---
 async function startBot() {
   if (client) {
-    logAdmin("[Sistem] ⚠️ Bot sudah aktif.");
+    logAdmin("[Sistem] Bot sudah aktif.");
     return;
   }
 
@@ -181,14 +179,14 @@ async function startBot() {
       latestQR = qr;
       updateBotStatus({ active: false, phase: "waiting-qr" });
       qrcode.generate(qr, { small: true });
-      logAdmin("📱 Scan QR code ini dengan WhatsApp Anda.");
+      logAdmin("[Bot] Scan QR code ini dengan WhatsApp Anda.");
       emitQrUpdate(qr);
     }
   });
 
   client.on("authenticated", () => {
     latestQR = null;
-    logPublic("[Bot] ✅ Authenticated");
+    logPublic("[Bot] Authenticated");
     updateBotStatus({ active: false, phase: "authenticated" });
     emitQrUpdate(null);
     armReadyDeadline("post-auth");
@@ -199,7 +197,7 @@ async function startBot() {
     isClientReady = true;
     firstBoot = false;
     latestQR = null;
-    logPublic("[Bot] ✅ WhatsApp Client is ready!");
+    logPublic("[Bot] WhatsApp Client is ready!");
     emitQrUpdate(null);
     updateBotStatus({ active: true, phase: "ready" });
     startHeartbeat(logAdmin, logPublic, TIMEZONE, moment);
@@ -212,8 +210,8 @@ async function startBot() {
   client.on("auth_failure", async (e) => {
     firstBoot = true;
     clearReadyDeadline();
-    logAdmin(`[Sistem] ❌ Autentikasi gagal${e ? `: ${e}` : ""}. Reset sesi...`);
-    logPublic("[Sistem] ❌ Autentikasi WhatsApp gagal. Menunggu pemindaian ulang.");
+    logAdmin(`[Sistem] Autentikasi gagal${e ? `: ${e}` : ""}. Reset sesi...`);
+    logPublic("[Sistem] Autentikasi WhatsApp gagal. Menunggu pemindaian ulang.");
     try {
       const sessionPath = path.join(
         __dirname,
@@ -230,7 +228,7 @@ async function startBot() {
     isClientReady = false;
     latestQR = null;
     emitQrUpdate(null);
-    logAdmin("[Sistem] 🔁 Silakan scan ulang QR terbaru.");
+    logAdmin("[Sistem] Silakan scan ulang QR terbaru.");
     updateBotStatus({ active: false, phase: "error" });
   });
 
@@ -239,7 +237,7 @@ async function startBot() {
 
     if (manualStopInProgress) {
       logAdmin(
-        "[Sistem] 🔌 Disconnect saat penghentian manual. Melewati auto-restart."
+        "[Sistem] Disconnect saat penghentian manual. Melewati auto-restart."
       );
       manualStopInProgress = false;
       return;
@@ -248,10 +246,8 @@ async function startBot() {
     if (isRestarting) return;
     isRestarting = true;
 
-    logAdmin(`[Sistem] ⚠️ Client disconnected: ${reason}. Mencoba restart...`);
-    logPublic(
-      "[Sistem] ⚠️ Koneksi WhatsApp terputus. Mencoba restart otomatis..."
-    );
+    logAdmin(`[Sistem] Client disconnected: ${reason}. Mencoba restart...`);
+    logPublic("[Sistem] Koneksi WhatsApp terputus. Mencoba restart otomatis...");
 
     try {
       await stopBot(
@@ -260,14 +256,14 @@ async function startBot() {
       );
     } catch (err) {
       logAdmin(
-        `[Sistem] ❌ Gagal menghentikan bot setelah disconnect: ${err.message}`
+        `[Sistem] Gagal menghentikan bot setelah disconnect: ${err.message}`
       );
     }
 
     try {
       await startBot();
     } catch (err) {
-      logAdmin(`[Sistem] ❌ Gagal restart bot: ${err.message}`);
+      logAdmin(`[Sistem] Gagal restart bot: ${err.message}`);
     } finally {
       isRestarting = false;
     }
@@ -275,7 +271,7 @@ async function startBot() {
 
   // --- Initialize ---
   try {
-    logPublic("[Sistem] 🔄 Inisialisasi WhatsApp client...");
+    logPublic("[Sistem] Inisialisasi WhatsApp client...");
     try {
       await client.initialize();
     } catch (e) {
@@ -308,19 +304,17 @@ async function startBot() {
       }
       await client.initialize();
     }
-    logPublic("[Sistem] ✅ Bot aktif.");
+    logPublic("[Sistem] Bot aktif.");
   } catch (err) {
     clearReadyDeadline();
-    logAdmin(`[Sistem] ❌ Gagal inisialisasi client: ${err.message}`);
-    logPublic(
-      "[Sistem] ❌ Bot gagal inisialisasi. Menunggu tindakan administrator."
-    );
+    logAdmin(`[Sistem] Gagal inisialisasi client: ${err.message}`);
+    logPublic("[Sistem] Bot gagal inisialisasi. Menunggu tindakan administrator.");
     client = null;
     isClientReady = false;
     latestQR = null;
     emitQrUpdate(null);
     logAdmin(
-      '[Sistem] 🛑 QR dibatalkan. Setelah perbaikan, tekan "Start Bot" untuk mencoba lagi.'
+      '[Sistem] QR dibatalkan. Setelah perbaikan, tekan "Start Bot" untuk mencoba lagi.'
     );
     updateBotStatus({ active: false, phase: "error" });
   }
@@ -345,10 +339,10 @@ async function stopBot(logPartsArg, optionsArg) {
 
   if (!client) {
     if (logParts.heartbeat)
-      logAdmin("[Sistem] 💓 Menghentikan heartbeat...");
+      logAdmin("[Sistem] Menghentikan heartbeat...");
     stopHeartbeat();
 
-    if (logParts.bot) logAdmin("[Sistem] ⚠️ Bot belum aktif.");
+    if (logParts.bot) logAdmin("[Sistem] Bot belum aktif.");
     updateBotStatus({ active: false, phase: nextPhase });
     return;
   }
@@ -357,7 +351,7 @@ async function stopBot(logPartsArg, optionsArg) {
     const schedulerLogger = logParts.scheduler ? addLog : () => {};
     await stopScheduler(schedulerLogger);
 
-    if (logParts.heartbeat) logAdmin("[Sistem] 💓 Menghentikan heartbeat...");
+    if (logParts.heartbeat) logAdmin("[Sistem] Menghentikan heartbeat...");
     stopHeartbeat();
 
     stopClientStatusChecker();
@@ -376,11 +370,11 @@ async function stopBot(logPartsArg, optionsArg) {
     latestQR = null;
     isClientReady = false;
 
-    if (logParts.bot) logPublic("[Sistem] 🤖 Bot dinonaktifkan.");
+    if (logParts.bot) logPublic("[Sistem] Bot dinonaktifkan.");
     emitQrUpdate(null);
     updateBotStatus({ active: false, phase: nextPhase });
   } catch (err) {
-    logAdmin(`[Sistem] ❌ Gagal stop bot: ${err.message}`);
+    logAdmin(`[Sistem] Gagal stop bot: ${err.message}`);
     throw err;
   }
 }
@@ -400,7 +394,7 @@ function startClientStatusChecker(intervalMs = 60000) {
         );
       } catch (err) {
         logAdmin(
-          `[Sistem] ❌ Gagal menghentikan bot setelah pengecekan silent crash: ${err.message}`
+          `[Sistem] Gagal menghentikan bot setelah pengecekan silent crash: ${err.message}`
         );
       }
 
@@ -408,7 +402,7 @@ function startClientStatusChecker(intervalMs = 60000) {
         await startBot();
       } catch (err) {
         logAdmin(
-          `[Sistem] ❌ Gagal restart bot setelah pengecekan silent crash: ${err.message}`
+          `[Sistem] Gagal restart bot setelah pengecekan silent crash: ${err.message}`
         );
       }
     } finally {
@@ -423,14 +417,14 @@ function startClientStatusChecker(intervalMs = 60000) {
     try {
       const state = await client.getState();
       if (state !== "CONNECTED") {
-        logAdmin(`[Sistem] ⚠️ Client state: ${state}. Restarting bot...`);
+        logAdmin(`[Sistem] Client state: ${state}. Restarting bot...`);
         logPublic(
-          "[Sistem] ⚠️ Koneksi bot terputus. Mencoba memulihkan secara otomatis..."
+          "[Sistem] Koneksi bot terputus. Mencoba memulihkan secara otomatis..."
         );
         await restartAfterSilentCrash();
       }
     } catch (err) {
-      logAdmin(`[Sistem] ❌ Gagal cek client state: ${err.message}`);
+      logAdmin(`[Sistem] Gagal cek client state: ${err.message}`);
       await restartAfterSilentCrash();
     }
   }, intervalMs);

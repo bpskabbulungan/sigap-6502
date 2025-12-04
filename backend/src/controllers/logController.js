@@ -26,32 +26,46 @@ function resolveArgs(levelOrOptions, maybeOptions) {
   };
 }
 
+function normalizeAudiences(audience) {
+  if (!audience) return [LOG_AUDIENCES.ADMIN];
+  if (Array.isArray(audience)) {
+    const unique = Array.from(new Set(audience.filter(Boolean)));
+    return unique.length > 0 ? unique : [LOG_AUDIENCES.ADMIN];
+  }
+  return [audience];
+}
+
 function addLog(text, levelOrOptions = "info", maybeOptions) {
   const { level, metadata } = resolveArgs(levelOrOptions, maybeOptions);
-  const audience = metadata.audience === LOG_AUDIENCES.PUBLIC ? LOG_AUDIENCES.PUBLIC : LOG_AUDIENCES.ADMIN;
+  const audiences = normalizeAudiences(metadata.audience).map((item) =>
+    item === LOG_AUDIENCES.PUBLIC ? LOG_AUDIENCES.PUBLIC : LOG_AUDIENCES.ADMIN
+  );
 
   const time = getCurrentLogTimestamp();
   const line = `[${time}] ${text}`;
 
-  if (logs.length >= MAX_LOG_ENTRIES) {
-    logs.shift();
-  }
-
-  logs.push({ line, audience });
   console.log(line);
 
-  switch (level) {
-    case "error":
-      logger.error(text);
-      break;
-    case "warn":
-      logger.warn(text);
-      break;
-    default:
-      logger.info(text);
-  }
+  audiences.forEach((audience) => {
+    if (logs.length >= MAX_LOG_ENTRIES) {
+      logs.shift();
+    }
+    logs.push({ line, audience });
+    emitLogUpdate(line, audience);
+  });
 
-  emitLogUpdate(line, audience);
+  if (!metadata.skipPersist) {
+    switch (level) {
+      case "error":
+        logger.error(text);
+        break;
+      case "warn":
+        logger.warn(text);
+        break;
+      default:
+        logger.info(text);
+    }
+  }
 }
 
 function getLogs(limit = 100, audience = LOG_AUDIENCES.PUBLIC) {

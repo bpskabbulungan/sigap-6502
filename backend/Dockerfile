@@ -1,4 +1,5 @@
-FROM node:20-slim AS base
+# Pin to latest Node 20 release with current security patches
+FROM node:20.18.1-bookworm-slim AS base
 
 ENV NODE_ENV=production
 

@@ -4,7 +4,7 @@ import { Card } from "./ui/Card";
 import { Badge } from "./ui/Badge";
 import { Skeleton } from "./ui/Skeleton";
 import { DataPlaceholder } from "./ui/DataPlaceholder";
-import { formatIsoDateId } from "../lib/dateFormatter";
+import { formatAppDate } from "../lib/dateFormatter";
 
 function mapTzLabel(tz) {
   const map = {
@@ -76,8 +76,8 @@ export function NextRunCard({ nextRun, loading }) {
           <div className="rounded-xl border border-amber-400/30 bg-amber-500/15 p-4 text-sm text-amber-100">
             <p className="font-semibold">Override manual aktif</p>
             <p>
-              {formatIsoDateId(details.override.date)} pukul {details.override.time}
-              {details.override.note ? ` — ${details.override.note}` : null}
+              {formatAppDate(details.override.date)} pukul {details.override.time}
+              {details.override.note ? ` – ${details.override.note}` : null}
             </p>
           </div>
         ) : (

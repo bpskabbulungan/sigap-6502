@@ -15,7 +15,11 @@ import { OverrideTable } from "../components/OverrideTable";
 import { Modal } from "../components/ui/Modal";
 import { useToast } from "../components/ui/ToastProvider.jsx";
 import { useConfirm } from "../components/ui/ConfirmProvider.jsx";
-import { formatIsoDateId } from "../lib/dateFormatter";
+import {
+  formatAppDate,
+  isValidAppDate,
+  normalizeAppDate,
+} from "../lib/dateFormatter";
 import {
   Plus,
   Info,
@@ -26,13 +30,12 @@ import {
 } from "lucide-react";
 import { useDocumentTitle } from "../utils/useDocumentTitle.js";
 
-function localTodayISO() {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 10);
-}
 function toDateKey(item) {
   return typeof item === "string" ? item : item?.date || "";
+}
+
+function sanitizeDateInput(value) {
+  return value.replace(/[/.]/g, "-").slice(0, 10);
 }
 
 export default function AdminOverridesPage() {
@@ -68,12 +71,16 @@ export default function AdminOverridesPage() {
 
   const existingDates = useMemo(() => {
     const list = schedule?.manualOverrides ?? [];
-    return new Set(list.map(toDateKey).filter(Boolean));
+    return new Set(
+      list
+        .map((item) => normalizeAppDate(toDateKey(item)))
+        .filter(Boolean)
+    );
   }, [schedule]);
 
-  const isDuplicate =
-    !!overrideForm.date && existingDates.has(overrideForm.date);
-  const isInvalid = !overrideForm.date || !overrideForm.time;
+  const normalizedDate = normalizeAppDate(overrideForm.date);
+  const isDuplicate = !!normalizedDate && existingDates.has(normalizedDate);
+  const isInvalid = !normalizedDate || !overrideForm.time;
 
   const showNativePicker = (el) => {
     if (!el) return;
@@ -88,7 +95,8 @@ export default function AdminOverridesPage() {
   };
 
   const handleRemove = async (date) => {
-    const formattedDate = formatIsoDateId(date);
+    const normalizedTarget = normalizeAppDate(date);
+    const formattedDate = formatAppDate(normalizedTarget || date);
     const ok = await confirm({
       title: "Hapus override?",
       message: `Override pada tanggal ${formattedDate} akan dihapus.`,
@@ -97,7 +105,7 @@ export default function AdminOverridesPage() {
     });
     if (!ok) return;
 
-    removeOverrideMutation.mutate(date, {
+    removeOverrideMutation.mutate(normalizedTarget || date, {
       onSuccess: () => addToast("Override dihapus.", { type: "success" }),
       onError: (err) =>
         addToast(err?.message || "Gagal menghapus override.", {
@@ -121,6 +129,10 @@ export default function AdminOverridesPage() {
     e?.preventDefault?.();
     setFormError("");
 
+    if (!normalizedDate || !isValidAppDate(overrideForm.date)) {
+      setFormError("Format tanggal harus DD-MM-YYYY.");
+      return;
+    }
     if (isDuplicate) {
       setFormError(
         "Tanggal tersebut sudah memiliki override. Hapus dulu untuk mengganti."
@@ -129,16 +141,19 @@ export default function AdminOverridesPage() {
     }
     if (isInvalid) return;
 
-    addOverrideMutation.mutate(overrideForm, {
-      onSuccess: () => {
-        addToast("Override ditambahkan.", { type: "success" });
-        setAddOpen(false);
-        clearForm();
-      },
-      onError: (err) => {
-        setFormError(err?.message || "Gagal menambahkan override.");
-      },
-    });
+    addOverrideMutation.mutate(
+      { ...overrideForm, date: normalizedDate },
+      {
+        onSuccess: () => {
+          addToast("Override ditambahkan.", { type: "success" });
+          setAddOpen(false);
+          clearForm();
+        },
+        onError: (err) => {
+          setFormError(err?.message || "Gagal menambahkan override.");
+        },
+      }
+    );
   };
 
   const overridesCount = schedule?.manualOverrides?.length || 0;
@@ -206,11 +221,17 @@ export default function AdminOverridesPage() {
               <Input
                 id="override-date"
                 ref={dateRef}
-                type="date"
-                min={localTodayISO()}
+                type="text"
+                inputMode="numeric"
+                pattern="\\d{2}-\\d{2}-\\d{4}"
+                placeholder="dd-mm-yyyy"
+                maxLength={10}
                 value={overrideForm.date}
                 onChange={(e) =>
-                  setOverrideForm((p) => ({ ...p, date: e.target.value }))
+                  setOverrideForm((p) => ({
+                    ...p,
+                    date: sanitizeDateInput(e.target.value),
+                  }))
                 }
                 required
                 className="w-full rounded-lg border-white/10 bg-slate-950/70 pr-10"

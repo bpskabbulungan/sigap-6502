@@ -1,6 +1,7 @@
+import { Trash2 } from "lucide-react";
 import { Button } from "./ui/Button";
 import { EmptyState } from "./ui/EmptyState";
-import { formatIsoDateId } from "../lib/dateFormatter";
+import { compareAppDates, formatAppDate } from "../lib/dateFormatter";
 
 export function OverrideTable({ overrides = [], onRemove }) {
   if (!overrides.length) {
@@ -12,7 +13,9 @@ export function OverrideTable({ overrides = [], onRemove }) {
     );
   }
 
-  const sorted = [...overrides].sort((a, b) => (a.date > b.date ? 1 : -1));
+  const sorted = [...overrides].sort((a, b) =>
+    compareAppDates(a.date, b.date)
+  );
 
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10">
@@ -33,7 +36,7 @@ export function OverrideTable({ overrides = [], onRemove }) {
                 className="group bg-slate-900/50 text-slate-200 transition hover:bg-slate-900/70"
               >
                 <td className="px-4 py-3 font-medium text-primary-300">
-                  {formatIsoDateId(item.date)}
+                  {formatAppDate(item.date)}
                 </td>
                 <td className="px-4 py-3">{item.time}</td>
                 <td className="px-4 py-3 text-slate-300">{item.note || "-"}</td>

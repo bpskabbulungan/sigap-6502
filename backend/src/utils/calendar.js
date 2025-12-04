@@ -4,6 +4,7 @@ const {
   getLocalCalendar,
   onLocalCalendarChange,
 } = require('../services/localCalendarService');
+const { APP_DATE_FORMAT } = require('./dateFormatter');
 
 const TIMEZONE = config.timezone;
 
@@ -30,7 +31,7 @@ onLocalCalendarChange((data) => {
 });
 
 function isWorkDay(date = moment().tz(TIMEZONE), addLog = () => {}) {
-  const todayStr = date.format('YYYY-MM-DD');
+  const todayStr = date.format(APP_DATE_FORMAT);
   const weekday = date.weekday();
 
   if (weekday === 0 || weekday === 6) {
@@ -53,7 +54,7 @@ function isWeekend(date) {
 }
 
 async function isWorkDayHybrid(addLog = () => {}, date = moment().tz(TIMEZONE)) {
-  const todayStr = date.format('YYYY-MM-DD');
+  const todayStr = date.format(APP_DATE_FORMAT);
 
   if (todayStr in workdayCache) {
     addLog(`[Calendar] Menggunakan cache untuk ${todayStr}`);
@@ -77,7 +78,7 @@ async function getNextWorkDay(startDate = moment().tz(TIMEZONE), addLog = () => 
   // eslint-disable-next-line no-constant-condition
   while (true) {
     if (isWeekend(date)) {
-      addLog(`[Calendar] ${date.format('YYYY-MM-DD')} adalah akhir pekan. Lewati.`);
+      addLog(`[Calendar] ${date.format(APP_DATE_FORMAT)} adalah akhir pekan. Lewati.`);
       date.add(1, 'day');
       continue;
     }
@@ -87,7 +88,7 @@ async function getNextWorkDay(startDate = moment().tz(TIMEZONE), addLog = () => 
 
     if (isWork) {
       tempLog.forEach(addLog);
-      addLog(`[Calendar] Hari kerja berikutnya: ${date.format('YYYY-MM-DD')}`);
+      addLog(`[Calendar] Hari kerja berikutnya: ${date.format(APP_DATE_FORMAT)}`);
       return date;
     }
 

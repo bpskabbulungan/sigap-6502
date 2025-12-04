@@ -3,6 +3,7 @@ const path = require('path');
 const { createLogger, format } = require('winston');
 const DailyRotateFile = require('winston-daily-rotate-file');
 const { getCurrentLogTimestamp } = require('./time');
+const { APP_DATE_FORMAT } = require('./dateFormatter');
 
 function setupLogger(name) {
   const logDir = path.join(__dirname, '..', '..', 'logs');
@@ -19,7 +20,7 @@ function setupLogger(name) {
     transports: [
       new DailyRotateFile({
         filename: path.join(logDir, `${name}-%DATE%.log`),
-        datePattern: 'YYYY-MM-DD',
+        datePattern: APP_DATE_FORMAT,
         maxSize: '20m',
         maxFiles: '14d',
       }),

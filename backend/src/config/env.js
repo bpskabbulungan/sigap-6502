@@ -49,7 +49,13 @@ module.exports = {
   timezone: process.env.TIMEZONE || process.env.TZ || "Asia/Makassar",
   // Default dev web app port matches Vite dev server (see frontend/vite.config.js)
   webAppUrl: process.env.WEB_APP_URL || "http://localhost:5174",
-  sessionSecret: process.env.SESSION_SECRET || "b4c902c0f1a644af9fbdacb0dd8718cf2a77f9d8f90abfdac3d1f0123456789",
+  sessionSecret: (() => {
+    const secret = process.env.SESSION_SECRET;
+    if (!secret || secret.length < 16) {
+      throw new Error("SESSION_SECRET wajib diisi dan minimal 16 karakter.");
+    }
+    return secret;
+  })(),
   admin: {
     username: process.env.ADMIN_USERNAME || "admin",
     passwordHash: process.env.ADMIN_PASSWORD_HASH || "",
@@ -60,7 +66,7 @@ module.exports = {
     public: process.env.PUBLIC_API_KEY || "",
   },
   socket: {
-    corsOrigin: process.env.SOCKET_CORS_ORIGIN || "*",
+    corsOrigin: process.env.SOCKET_CORS_ORIGIN || "",
     allowedOrigins: parseOrigins(process.env.SOCKET_ALLOWED_ORIGINS),
   },
   scheduler: {

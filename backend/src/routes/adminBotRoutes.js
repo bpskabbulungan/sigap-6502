@@ -1,10 +1,11 @@
 const express = require('express');
 const { startBot, stopBot, getBotStatus } = require('../controllers/botController');
 const { cleanupWwebjsProfileLocks } = require('../utils/chromeProfile');
+const { botActionLimiter } = require('../middleware/rateLimiters');
 
 const router = express.Router();
 
-router.post('/start', async (req, res, next) => {
+router.post('/start', botActionLimiter, async (req, res, next) => {
   try {
     try {
       const removed = cleanupWwebjsProfileLocks();
@@ -22,7 +23,7 @@ router.post('/start', async (req, res, next) => {
   }
 });
 
-router.post('/stop', async (req, res, next) => {
+router.post('/stop', botActionLimiter, async (req, res, next) => {
   try {
     await stopBot(undefined, { manual: true });
     const status = getBotStatus();

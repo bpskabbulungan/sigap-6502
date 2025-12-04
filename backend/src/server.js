@@ -10,8 +10,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 
 const config = require('./config/env');
-console.log('[BOOT] sessionSecret present?', !!config.sessionSecret);
-console.log('[BOOT] sessionSecret (first 8 chars):', config.sessionSecret.slice(0,8));
 const { createApp, attachSocket, buildAllowedOrigins } = require('./app');
 const { initSocket } = require('./utils/socketHandler');
 const { addLog, LOG_AUDIENCES } = require('./controllers/logController');

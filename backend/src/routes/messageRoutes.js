@@ -1,8 +1,11 @@
 const express = require("express");
 const { getClient } = require("../controllers/botController");
 const { sendMessage } = require("../controllers/messageController");
+const { requireAdmin } = require("../middleware/adminAuth");
 
 const router = express.Router();
+
+router.use(requireAdmin);
 
 router.post("/send", async (req, res) => {
   const { number, message } = req.body;

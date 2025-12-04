@@ -1,7 +1,8 @@
-const moment = require("moment-timezone");
-const config = require("../config/env");
+const moment = require('moment-timezone');
+const config = require('../config/env');
+const { APP_DATE_FORMAT } = require('./dateFormatter');
 
-const LOG_TIMESTAMP_FORMAT = "DD/MM HH:mm:ss";
+const LOG_TIMESTAMP_FORMAT = `${APP_DATE_FORMAT} HH:mm:ss`;
 
 function getCurrentLogTimestamp() {
   return moment().tz(config.timezone).format(LOG_TIMESTAMP_FORMAT);

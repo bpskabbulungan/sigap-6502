@@ -1,22 +1,34 @@
-const fs = require("fs");
-const path = require("path");
-const readline = require("readline");
-const moment = require("moment-timezone");
+const fs = require('fs');
+const path = require('path');
+const readline = require('readline');
+const moment = require('moment-timezone');
 
-const config = require("../config/env");
-const { LOG_TIMESTAMP_FORMAT } = require("./time");
+const config = require('../config/env');
+const { LOG_TIMESTAMP_FORMAT } = require('./time');
+const {
+  APP_DATE_FORMAT,
+  LEGACY_ISO_DATE_FORMAT,
+  normalizeAppDate,
+} = require('./dateFormatter');
 
-const LOG_LINE_REGEX = /^\[(\d{2}\/\d{2} \d{2}:\d{2}:\d{2})\]\s+([A-Z]+)\s*-\s*(.*)$/;
+const LEGACY_LOG_TIMESTAMP_FORMAT = 'DD/MM HH:mm:ss';
+const LOG_LINE_REGEX = /^\[(.+?)\]\s+([A-Z]+)\s*-\s*(.*)$/;
 
 function getFileDateContext(logFilePath) {
   const fileName = path.basename(logFilePath);
-  const match = fileName.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) {
+  const appMatch = fileName.match(/(\d{2})-(\d{2})-(\d{4})/);
+  if (appMatch) {
+    const [, day, month, year] = appMatch;
+    return moment.tz(`${day}-${month}-${year}`, APP_DATE_FORMAT, true, config.timezone);
+  }
+
+  const legacyMatch = fileName.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!legacyMatch) {
     return null;
   }
 
-  const [, year, month, day] = match;
-  return moment.tz(`${year}-${month}-${day}`, "YYYY-MM-DD", config.timezone);
+  const [, year, month, day] = legacyMatch;
+  return moment.tz(`${year}-${month}-${day}`, LEGACY_ISO_DATE_FORMAT, true, config.timezone);
 }
 
 function normalizeYear(parsedMoment, contextMoment) {
@@ -48,18 +60,30 @@ function parseLogLine(line, contextMoment) {
 
   const [, timestampPart, rawLevel, rawMessage] = match;
 
-  let parsedMoment = moment.tz(
-    timestampPart,
-    LOG_TIMESTAMP_FORMAT,
-    true,
-    config.timezone
-  );
+  const candidates = [
+    { format: LOG_TIMESTAMP_FORMAT, needsContext: false },
+    { format: LEGACY_LOG_TIMESTAMP_FORMAT, needsContext: true },
+  ];
 
-  if (!parsedMoment.isValid()) {
+  let parsedMoment = null;
+  let needsContext = false;
+
+  for (const { format, needsContext: requireContext } of candidates) {
+    const attempt = moment.tz(timestampPart, format, true, config.timezone);
+    if (attempt.isValid()) {
+      parsedMoment = attempt;
+      needsContext = requireContext;
+      break;
+    }
+  }
+
+  if (!parsedMoment) {
     return null;
   }
 
-  parsedMoment = normalizeYear(parsedMoment, contextMoment);
+  if (needsContext) {
+    parsedMoment = normalizeYear(parsedMoment, contextMoment);
+  }
 
   if (!parsedMoment.isValid()) {
     return null;
@@ -73,7 +97,8 @@ function parseLogLine(line, contextMoment) {
 }
 
 function getDateKey(date) {
-  return moment.tz(date, config.timezone).format("YYYY-MM-DD");
+  const normalized = normalizeAppDate(moment.tz(date, config.timezone).format(APP_DATE_FORMAT));
+  return normalized || moment.tz(date, config.timezone).format(APP_DATE_FORMAT);
 }
 
 async function parseLogFilePerDay(logFilePath) {

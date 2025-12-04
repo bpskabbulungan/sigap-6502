@@ -1,5 +1,34 @@
 let chartInstance = null;
 
+function parseLabelDate(value) {
+  if (typeof value !== "string") return null;
+  const parts = value.split("-");
+  if (parts.length !== 3) return null;
+
+  if (parts[0].length === 2) {
+    const [day, month, year] = parts.map(Number);
+    if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) return null;
+    return new Date(Date.UTC(year, month - 1, day));
+  }
+
+  if (parts[0].length === 4) {
+    const [year, month, day] = parts.map(Number);
+    if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) return null;
+    return new Date(Date.UTC(year, month - 1, day));
+  }
+
+  return null;
+}
+
+function sortLabels(a, b) {
+  const left = parseLabelDate(a);
+  const right = parseLabelDate(b);
+  if (left && right) return left - right;
+  if (left) return -1;
+  if (right) return 1;
+  return String(a).localeCompare(String(b));
+}
+
 export async function renderCharts() {
   try {
     const res = await fetch("/stats");
@@ -17,7 +46,7 @@ export async function renderCharts() {
         ...Object.keys(errorsPerDay),
         ...Object.keys(uptimePerDay),
       ])
-    ).sort();
+    ).sort(sortLabels);
 
     const messages = labels.map((d) => messagesPerDay[d] || 0);
     const errors = labels.map((d) => errorsPerDay[d] || 0);

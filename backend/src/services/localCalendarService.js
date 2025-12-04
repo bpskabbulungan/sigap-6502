@@ -1,5 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+const {
+  normalizeAppDate,
+  APP_DATE_REGEX,
+  compareAppDates,
+} = require('../utils/dateFormatter');
 
 const STORAGE_PATH = path.join(__dirname, '..', '..', 'storage', 'calendar_local.json');
 const TEMPLATE_PATH = path.join(__dirname, '..', 'templates', 'calendar_local.json');
@@ -25,9 +30,18 @@ function normalizeCalendar(data = {}) {
   const liburan = Array.isArray(data.LIBURAN) ? data.LIBURAN : [];
   const cutiBersama = Array.isArray(data.CUTI_BERSAMA) ? data.CUTI_BERSAMA : [];
 
+  const normalizeList = (list) =>
+    Array.from(
+      new Set(
+        list
+          .map(normalizeAppDate)
+          .filter((item) => APP_DATE_REGEX.test(item))
+      )
+    ).sort(compareAppDates);
+
   return {
-    LIBURAN: Array.from(new Set(liburan)).sort(),
-    CUTI_BERSAMA: Array.from(new Set(cutiBersama)).sort(),
+    LIBURAN: normalizeList(liburan),
+    CUTI_BERSAMA: normalizeList(cutiBersama),
   };
 }
 

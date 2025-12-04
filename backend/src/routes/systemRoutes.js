@@ -6,6 +6,8 @@ const { getLogs, addLog, LOG_AUDIENCES } = require('../controllers/logController
 const { getQR, getBotStatus } = require('../controllers/botController');
 const { parseLogFilePerDay } = require('../utils/statParser');
 const { TIMEZONE } = require('../utils/calendar');
+const { APP_DATE_FORMAT } = require('../utils/dateFormatter');
+const { requireAdmin } = require('../middleware/adminAuth');
 
 const router = express.Router();
 let QRCodeLib = null;
@@ -22,7 +24,7 @@ router.get('/health', (req, res) => {
   });
 });
 
-router.get('/logs', (req, res) => {
+router.get('/logs', requireAdmin, (req, res) => {
   const limit = Number.parseInt(req.query.limit, 10) || 100;
   const audience =
     req.query.audience === LOG_AUDIENCES.ADMIN
@@ -36,12 +38,12 @@ router.get('/bot/status', (req, res) => {
   res.json(getBotStatus());
 });
 
-router.get('/qr', (req, res) => {
+router.get('/qr', requireAdmin, (req, res) => {
   const qr = getQR();
   res.json({ qr });
 });
 
-router.get('/qr.svg', async (req, res, next) => {
+router.get('/qr.svg', requireAdmin, async (req, res, next) => {
   try {
     const qr = getQR();
     if (!qr) {
@@ -67,15 +69,17 @@ router.get('/qr.svg', async (req, res, next) => {
   }
 });
 
-router.get('/keepalive', (req, res) => {
-  const now = moment().tz(TIMEZONE).toISOString();
-  addLog(`[KeepAlive] Ping diterima pada ${now}`, {
+router.get('/keepalive', requireAdmin, (req, res) => {
+  const now = moment().tz(TIMEZONE);
+  const nowIso = now.toISOString();
+  const nowLabel = now.format(`${APP_DATE_FORMAT} HH:mm:ss`);
+  addLog(`[KeepAlive] Ping diterima pada ${nowLabel}`, {
     audience: LOG_AUDIENCES.ADMIN,
   });
-  res.json({ status: 'alive', timestamp: now });
+  res.json({ status: 'alive', timestamp: nowIso, formattedTimestamp: nowLabel });
 });
 
-router.get('/stats', async (req, res, next) => {
+router.get('/stats', requireAdmin, async (req, res, next) => {
   const logsDir = path.join(__dirname, '..', '..', 'logs');
   try {
     await fs.promises.mkdir(logsDir, { recursive: true });

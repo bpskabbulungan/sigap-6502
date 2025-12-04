@@ -28,8 +28,9 @@ export function BotControlPanel() {
     () => new Set(["starting", "waiting-qr", "authenticated", "restarting"]),
     []
   );
-  const clientCreatedPhases = useMemo(
-    () => new Set(["waiting-qr", "authenticated", "ready", "restarting"]),
+  // Phases where it is safe/expected to allow a manual Stop action (even if still starting)
+  const stoppablePhases = useMemo(
+    () => new Set(["starting", "waiting-qr", "authenticated", "ready", "restarting", "error"]),
     []
   );
 
@@ -58,7 +59,7 @@ export function BotControlPanel() {
   }, [active, addToast]);
 
   const disableStart = starting || active || transitionalPhases.has(phase);
-  const allowStop = active || clientCreatedPhases.has(phase);
+  const allowStop = active || stoppablePhases.has(phase);
   const disableStop = stopping || !allowStop;
 
   const handleStop = async () => {

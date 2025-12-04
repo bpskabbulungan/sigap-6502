@@ -37,7 +37,10 @@ function formatTimestamp() {
 
 function logToAudiences(message, level = "info") {
   withContext(({ logAdmin, logPublic }) => {
-    if (typeof logAdmin === "function") logAdmin(message, level);
+    if (typeof logAdmin === "function") {
+      logAdmin(message, level, { audience: ["admin", "public"] });
+      return;
+    }
     if (typeof logPublic === "function") logPublic(message, level);
   });
 }

@@ -6,13 +6,20 @@ const { v4: uuid } = require('uuid');
 
 const config = require('../config/env');
 const { setupLogger } = require('../utils/logger');
+const {
+  APP_DATE_FORMAT,
+  APP_DATE_REGEX,
+  compareAppDates,
+  normalizeAppDate,
+  parseAppDate,
+  parseAppDateTime,
+} = require('../utils/dateFormatter');
 
 const logger = setupLogger('scheduler');
 
 const STORAGE_DIR = path.resolve(__dirname, '..', '..', 'storage');
 const CONFIG_FILENAME = 'schedule-config.json';
 const CONFIG_PATH = path.join(STORAGE_DIR, CONFIG_FILENAME);
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
 const LEGACY_DEFAULT_VERSION = 'legacy';
@@ -92,16 +99,25 @@ function sanitizeSchedule(raw) {
     providedVersion || LEGACY_DEFAULT_VERSION;
 
   schedule.manualOverrides = schedule.manualOverrides
-    .map((item) => ({
-      id: item.id || uuid(),
-      date: item.date,
-      time: item.time,
-      note: item.note || null,
-      createdAt: item.createdAt || new Date().toISOString(),
-      createdBy: item.createdBy || 'unknown',
-      consumedAt: item.consumedAt || null,
-    }))
-    .filter((item) => DATE_PATTERN.test(item.date) && TIME_PATTERN.test(item.time));
+    .map((item) => {
+      const normalizedDate = normalizeAppDate(item.date);
+      return {
+        id: item.id || uuid(),
+        date: normalizedDate,
+        time: item.time,
+        note: item.note || null,
+        createdAt: item.createdAt || new Date().toISOString(),
+        createdBy: item.createdBy || 'unknown',
+        consumedAt: item.consumedAt || null,
+      };
+    })
+    .filter(
+      (item) =>
+        APP_DATE_REGEX.test(item.date) &&
+        TIME_PATTERN.test(item.time) &&
+        parseAppDate(item.date, schedule.timezone)
+    )
+    .sort((a, b) => compareAppDates(a.date, b.date));
 
   const autoUpgradeReason = getAutoUpgradeReason(schedule);
 
@@ -199,11 +215,16 @@ function pruneOverrides(schedule, referenceMoment) {
   const keepThreshold = referenceMoment.clone().subtract(3, 'days').startOf('day');
 
   schedule.manualOverrides = schedule.manualOverrides.filter((item) => {
-    const dateMoment = moment.tz(item.date, 'YYYY-MM-DD', schedule.timezone);
-    if (!dateMoment.isValid()) return false;
+    const dateMoment = parseAppDate(item.date, schedule.timezone);
+    if (!dateMoment) return false;
     if (dateMoment.isBefore(keepThreshold)) return false;
     return true;
   });
+}
+
+function isUpcoming(targetMoment, referenceMoment, graceMs = 0) {
+  const positiveGrace = Math.max(graceMs, 0);
+  return targetMoment.diff(referenceMoment) >= -positiveGrace;
 }
 
 async function getSchedule() {
@@ -246,8 +267,10 @@ async function setSchedule(payload, options = {}) {
 }
 
 async function addManualOverride({ date, time, note }, options = {}) {
-  if (!DATE_PATTERN.test(date)) {
-    throw new Error('Format tanggal harus YYYY-MM-DD');
+  const normalizedDate = normalizeAppDate(date);
+
+  if (!normalizedDate || !APP_DATE_REGEX.test(normalizedDate)) {
+    throw new Error('Format tanggal harus DD-MM-YYYY');
   }
   if (!TIME_PATTERN.test(time)) {
     throw new Error('Format waktu harus HH:mm');
@@ -255,13 +278,13 @@ async function addManualOverride({ date, time, note }, options = {}) {
 
   const schedule = await getSchedule();
   const timezone = schedule.timezone;
-  const targetMoment = moment.tz(`${date} ${time}`, 'YYYY-MM-DD HH:mm', timezone);
+  const targetMoment = parseAppDateTime(normalizedDate, time, timezone);
 
-  if (!targetMoment.isValid()) {
+  if (!targetMoment) {
     throw new Error('Tanggal atau waktu tidak valid');
   }
 
-  const existing = findActiveOverride(schedule, date);
+  const existing = findActiveOverride(schedule, normalizedDate);
   if (existing) {
     existing.time = time;
     existing.note = note || existing.note;
@@ -270,7 +293,7 @@ async function addManualOverride({ date, time, note }, options = {}) {
   } else {
     schedule.manualOverrides.push({
       id: uuid(),
-      date,
+      date: normalizedDate,
       time,
       note: note || null,
       createdAt: new Date().toISOString(),
@@ -279,7 +302,7 @@ async function addManualOverride({ date, time, note }, options = {}) {
     });
   }
 
-  schedule.manualOverrides.sort((a, b) => (a.date < b.date ? -1 : 1));
+  schedule.manualOverrides.sort((a, b) => compareAppDates(a.date, b.date));
   schedule.updatedBy = options.updatedBy || schedule.updatedBy;
 
   return writeSchedule(schedule);
@@ -287,37 +310,43 @@ async function addManualOverride({ date, time, note }, options = {}) {
 
 async function removeManualOverride(date) {
   const schedule = await getSchedule();
-  schedule.manualOverrides = schedule.manualOverrides.filter((item) => item.date !== date);
+  const normalizedDate = normalizeAppDate(date);
+  schedule.manualOverrides = schedule.manualOverrides.filter(
+    (item) => item.date !== normalizedDate
+  );
   return writeSchedule(schedule);
 }
 
 async function consumeManualOverride(date) {
   const schedule = await getSchedule();
-  const override = findActiveOverride(schedule, date);
+  const normalizedDate = normalizeAppDate(date);
+  const override = findActiveOverride(schedule, normalizedDate);
   if (override) {
     override.consumedAt = new Date().toISOString();
     await writeSchedule(schedule);
   }
 }
 
-async function getNextRun({ referenceMoment = moment().tz(config.timezone), includeDetails = false } = {}) {
+async function getNextRun({
+  referenceMoment = moment().tz(config.timezone),
+  includeDetails = false,
+  graceMs = 0,
+} = {}) {
   const schedule = await getSchedule();
   const tzReference = referenceMoment.clone().tz(schedule.timezone);
 
   if (schedule.paused) {
     const override = schedule.manualOverrides.find((item) => {
-      const target = moment.tz(`${item.date} ${item.time}`, 'YYYY-MM-DD HH:mm', schedule.timezone);
-      return target.isAfter(tzReference) && !item.consumedAt;
+      const target = parseAppDateTime(item.date, item.time, schedule.timezone);
+      return isUpcoming(target, tzReference, graceMs) && !item.consumedAt;
     });
 
     if (!override) {
       return null;
     }
 
-    const targetMoment = parseTimeToMoment(
-      moment.tz(override.date, 'YYYY-MM-DD', schedule.timezone),
-      override.time
-    );
+    const dateMoment = parseAppDate(override.date, schedule.timezone);
+    const targetMoment = parseTimeToMoment(dateMoment, override.time);
 
     return {
       schedule,
@@ -328,12 +357,12 @@ async function getNextRun({ referenceMoment = moment().tz(config.timezone), incl
 
   let cursor = tzReference.clone();
   for (let i = 0; i < 21; i += 1) {
-    const dateKey = cursor.format('YYYY-MM-DD');
+    const dateKey = cursor.format(APP_DATE_FORMAT);
     const override = findActiveOverride(schedule, dateKey);
 
     if (override) {
       const targetMoment = parseTimeToMoment(cursor, override.time);
-      if (targetMoment.isAfter(tzReference)) {
+      if (isUpcoming(targetMoment, tzReference, graceMs)) {
         return {
           schedule,
           override,
@@ -352,7 +381,7 @@ async function getNextRun({ referenceMoment = moment().tz(config.timezone), incl
     }
 
     const targetMoment = parseTimeToMoment(cursor, defaultTime);
-    if (targetMoment.isAfter(tzReference)) {
+    if (isUpcoming(targetMoment, tzReference, graceMs)) {
       return {
         schedule,
         override: null,

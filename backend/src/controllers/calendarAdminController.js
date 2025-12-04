@@ -1,7 +1,6 @@
 const { z } = require('zod');
 const { getLocalCalendar, setLocalCalendar } = require('../services/localCalendarService');
-
-const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+const { APP_DATE_REGEX } = require('../utils/dateFormatter');
 
 function findDuplicates(values = []) {
   const seen = new Set();
@@ -16,7 +15,7 @@ function findDuplicates(values = []) {
 }
 
 const uniqueDateArraySchema = z
-  .array(z.string().regex(isoDateRegex, 'Format tanggal harus YYYY-MM-DD'))
+  .array(z.string().trim().regex(APP_DATE_REGEX, 'Format tanggal harus DD-MM-YYYY'))
   .superRefine((value, ctx) => {
     const duplicates = findDuplicates(value);
     if (duplicates.length > 0) {

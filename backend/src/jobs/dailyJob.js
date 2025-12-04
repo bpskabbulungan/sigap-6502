@@ -11,6 +11,7 @@ const {
 } = require('../services/scheduleService');
 const config = require('../config/env');
 const { LOG_AUDIENCES } = require('../controllers/logController');
+const { APP_DATE_FORMAT } = require('../utils/dateFormatter');
 
 moment.locale('id');
 
@@ -19,8 +20,12 @@ let cachedClient = null;
 let logger = console.log;
 let schedulerPrimed = false;
 
-const EARLY_TRIGGER_GRACE_MS = 15 * 1000; // tolerate slight timer jitter
-const LATE_TRIGGER_GRACE_MS = 5 * 60 * 1000; // allow short drifts before re-planning
+// Tidak boleh kirim lebih awal; 0ms grace memastikan kita menunggu tepat waktunya.
+const EARLY_TRIGGER_GRACE_MS = 0;
+// Boleh terlambat sampai 5 menit dan tetap kirim.
+const LATE_TRIGGER_GRACE_MS = 5 * 60 * 1000;
+const DATE_TIME_FORMAT = `${APP_DATE_FORMAT} HH:mm`;
+const DATE_TIME_FORMAT_WITH_SECONDS = `${DATE_TIME_FORMAT}:ss`;
 
 function setTimer(delay, handler) {
   if (jobTimer) {
@@ -88,7 +93,7 @@ async function planNextRun({ referenceMoment, reason = 'auto' } = {}) {
       : 'Sumber jadwal rutin';
     logger(
       `[Sistem] Pengiriman akan dilakukan pada ${targetLocal.format(
-        'dddd, DD MMMM YYYY HH:mm z'
+        `dddd, ${DATE_TIME_FORMAT} z`
       )} (${dayNote}). ${sourceNote}.`,
       {
         audience: LOG_AUDIENCES.PUBLIC,
@@ -101,7 +106,7 @@ async function planNextRun({ referenceMoment, reason = 'auto' } = {}) {
     const delayMs = Math.max(scheduleTargetMoment.diff(scheduleNow), 0);
     logger(
       `[Scheduler] Menjadwalkan job berikutnya pada ${nextRun.targetMoment.format(
-        'YYYY-MM-DD HH:mm:ss'
+        DATE_TIME_FORMAT_WITH_SECONDS
       )} (reason=${reason}, delay=${delayMs}ms)`,
       {
         audience: LOG_AUDIENCES.PUBLIC,
@@ -135,6 +140,7 @@ async function executeRun(nextRun) {
   try {
     const verification = await getNextRun({
       referenceMoment: nowTz.clone(),
+      graceMs: LATE_TRIGGER_GRACE_MS,
     });
 
     if (!verification || !verification.targetMoment) {
@@ -150,17 +156,17 @@ async function executeRun(nextRun) {
     const originalTargetTz = nextRun.targetMoment.clone().tz(scheduleTimezone);
     const driftFromOriginal = verifiedTargetTz.diff(originalTargetTz);
 
-    if (Math.abs(driftFromOriginal) > EARLY_TRIGGER_GRACE_MS) {
-      const rescheduleDelay = verifiedTargetTz.diff(nowTz);
-      if (rescheduleDelay > EARLY_TRIGGER_GRACE_MS) {
-        logger(
-          `[Scheduler] Jadwal berubah saat eksekusi. Mengikuti jadwal baru ${verifiedTargetTz.format(
-            'YYYY-MM-DD HH:mm z'
-          )} (delay ${rescheduleDelay}ms).`,
-          { audience: LOG_AUDIENCES.PUBLIC }
-        );
-        setTimer(rescheduleDelay, () => executeRun(verification));
-        return;
+      if (Math.abs(driftFromOriginal) > EARLY_TRIGGER_GRACE_MS) {
+        const rescheduleDelay = verifiedTargetTz.diff(nowTz);
+        if (rescheduleDelay > EARLY_TRIGGER_GRACE_MS) {
+          logger(
+            `[Scheduler] Jadwal berubah saat eksekusi. Mengikuti jadwal baru ${verifiedTargetTz.format(
+              `${DATE_TIME_FORMAT} z`
+            )} (delay ${rescheduleDelay}ms).`,
+            { audience: LOG_AUDIENCES.PUBLIC }
+          );
+          setTimer(rescheduleDelay, () => executeRun(verification));
+          return;
       }
     }
 
@@ -177,9 +183,9 @@ async function executeRun(nextRun) {
 
   if (diffMs > EARLY_TRIGGER_GRACE_MS) {
     logger(
-      `[Scheduler] Pemicu terlalu awal (${diffMs}ms sebelum ${targetMomentTz.format(
-        'YYYY-MM-DD HH:mm z'
-      )}). Menjadwalkan ulang agar tepat waktu.`,
+      `[Scheduler] Belum waktunya kirim (lebih awal ${diffMs}ms; target ${targetMomentTz.format(
+        `${DATE_TIME_FORMAT} z`
+      )}). Menunggu hingga waktunya dan menjadwalkan ulang.`,
       {
         audience: LOG_AUDIENCES.PUBLIC,
       }
@@ -191,7 +197,7 @@ async function executeRun(nextRun) {
   if (diffMs < -LATE_TRIGGER_GRACE_MS) {
     logger(
       `[Scheduler] Job tertunda ${Math.abs(diffMs)}ms dari jadwal ${targetMomentTz.format(
-        'YYYY-MM-DD HH:mm z'
+        `${DATE_TIME_FORMAT} z`
       )}. Mencari jadwal baru.`,
       {
         audience: LOG_AUDIENCES.PUBLIC,
@@ -211,7 +217,7 @@ async function executeRun(nextRun) {
       const workday = await isWorkDayHybrid(logger, targetMoment);
       if (!workday) {
         logger(
-          `[Scheduler] ${targetMoment.format('YYYY-MM-DD')} bukan hari kerja. Skip pengiriman.`,
+          `[Scheduler] ${targetMoment.format(APP_DATE_FORMAT)} bukan hari kerja. Skip pengiriman.`,
           {
             audience: LOG_AUDIENCES.PUBLIC,
           }

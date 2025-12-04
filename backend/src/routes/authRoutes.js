@@ -4,6 +4,7 @@ const {
   handleLogout,
   handleSession,
 } = require('../controllers/authController');
+const { loginLimiter } = require('../middleware/rateLimiters');
 
 const router = express.Router();
 
@@ -15,7 +16,7 @@ router.use((req, res, next) => {
   next();
 });
 
-router.post('/login', handleLogin);
+router.post('/login', loginLimiter, handleLogin);
 router.post('/logout', handleLogout);
 router.get('/session', handleSession);
 

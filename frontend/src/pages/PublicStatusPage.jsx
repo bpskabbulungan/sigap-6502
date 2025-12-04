@@ -9,7 +9,7 @@ import { Skeleton } from "../components/ui/Skeleton";
 import { DataPlaceholder } from "../components/ui/DataPlaceholder";
 import { StatusPill } from "../components/StatusPill";
 import { PublicLayout } from "../components/layout/PublicLayout";
-import { formatIsoDateId } from "../lib/dateFormatter";
+import { compareAppDates, formatAppDate } from "../lib/dateFormatter";
 
 const DEFAULT_TIMES = {
   1: "16:00",
@@ -139,7 +139,7 @@ export default function PublicStatusPage() {
                       <div className="rounded-xl border border-amber-400/30 bg-amber-500/15 p-4 text-sm text-amber-100">
                         <p className="font-semibold">Override aktif</p>
                         <p>
-                          {formatIsoDateId(nextRun.override.date, { withWeekday: true })} pukul {nextRun.override.time}
+                          {formatAppDate(nextRun.override.date, { withWeekday: true })} pukul {nextRun.override.time}
                           {nextRun.override.note
                             ? ` � ${nextRun.override.note}`
                             : ""}
@@ -244,7 +244,9 @@ export default function PublicStatusPage() {
                   ...(stats.messagesPerDay || {}),
                   ...(stats.errorsPerDay || {}),
                   ...(stats.uptimePerDay || {}),
-                }).slice(-7);
+                })
+                  .sort(compareAppDates)
+                  .slice(-7);
 
                 return (
                   <div className="space-y-4">

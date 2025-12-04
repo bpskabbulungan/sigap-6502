@@ -10,10 +10,11 @@ const {
 } = require('../services/scheduleService');
 const { forceReschedule } = require('../jobs/dailyJob');
 const config = require('../config/env');
-const { formatDateLabels } = require('../utils/dateFormatter');
+const { APP_DATE_REGEX, formatDateLabels } = require('../utils/dateFormatter');
 
 const timeSchema = z
   .string()
+  .trim()
   .regex(/^([01]?\d|2[0-3]):[0-5]\d$/, 'Format waktu HH:mm');
 
 const dayKeySchema = z.enum(['1', '2', '3', '4', '5', '6', '7']);
@@ -30,7 +31,7 @@ const updateScheduleSchema = z
 
 const overrideSchema = z
   .object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal YYYY-MM-DD'),
+    date: z.string().trim().regex(APP_DATE_REGEX, 'Format tanggal DD-MM-YYYY'),
     time: timeSchema,
     note: z.string().max(255).nullable().optional(),
   })

@@ -8,6 +8,7 @@ const moment = require('moment-timezone');
 const {
   scheduler: { defaultSchedule: DEFAULT_SCHEDULE },
 } = require('../src/config/env');
+const { APP_DATE_FORMAT } = require('../src/utils/dateFormatter');
 
 const STORAGE_DIR = path.resolve(__dirname, '..', 'storage');
 const CONFIG_PATH = path.join(STORAGE_DIR, 'schedule-config.json');
@@ -52,7 +53,7 @@ test.after(async () => {
 });
 
 function buildReference(dateString) {
-  return moment.tz(`${dateString} 09:00`, 'YYYY-MM-DD HH:mm', TIMEZONE);
+  return moment.tz(`${dateString} 09:00`, `${APP_DATE_FORMAT} HH:mm`, true, TIMEZONE);
 }
 
 test('returns default run times for the latest schedule version', async (t) => {
@@ -70,11 +71,11 @@ test('returns default run times for the latest schedule version', async (t) => {
   const { getNextRun, getSchedule } = loadService();
 
   const weekdayCases = [
-    { label: 'Monday', date: '2024-07-01', key: '1' },
-    { label: 'Tuesday', date: '2024-07-02', key: '2' },
-    { label: 'Wednesday', date: '2024-07-03', key: '3' },
-    { label: 'Thursday', date: '2024-07-04', key: '4' },
-    { label: 'Friday', date: '2024-07-05', key: '5' },
+    { label: 'Monday', date: '01-07-2024', key: '1' },
+    { label: 'Tuesday', date: '02-07-2024', key: '2' },
+    { label: 'Wednesday', date: '03-07-2024', key: '3' },
+    { label: 'Thursday', date: '04-07-2024', key: '4' },
+    { label: 'Friday', date: '05-07-2024', key: '5' },
   ];
 
   for (const { label, date, key } of weekdayCases) {
@@ -90,7 +91,7 @@ test('returns default run times for the latest schedule version', async (t) => {
         expected
       );
       assert.equal(nextRun.targetMoment.tz(TIMEZONE).isoWeekday(),
-        moment.tz(date, 'YYYY-MM-DD', TIMEZONE).isoWeekday());
+        moment.tz(date, APP_DATE_FORMAT, true, TIMEZONE).isoWeekday());
     });
   }
 
@@ -131,7 +132,7 @@ test('auto-upgrades legacy schedules to the latest default times', async (t) => 
   assert.deepEqual(persisted.dailyTimes, upgraded.dailyTimes);
 
   const mondayRun = await getNextRun({
-    referenceMoment: buildReference('2024-07-01'),
+    referenceMoment: buildReference('01-07-2024'),
   });
   assert.equal(
     mondayRun.targetMoment.clone().tz(TIMEZONE).format('HH:mm'),
@@ -139,10 +140,42 @@ test('auto-upgrades legacy schedules to the latest default times', async (t) => 
   );
 
   const fridayRun = await getNextRun({
-    referenceMoment: buildReference('2024-07-05'),
+    referenceMoment: buildReference('05-07-2024'),
   });
   assert.equal(
     fridayRun.targetMoment.clone().tz(TIMEZONE).format('HH:mm'),
     DEFAULT_SCHEDULE.dailyTimes['5']
+  );
+});
+
+test('keeps the current slot when the reference time is within the grace window', async () => {
+  const scheduleDocument = {
+    timezone: TIMEZONE,
+    dailyTimes: { ...DEFAULT_SCHEDULE.dailyTimes },
+    manualOverrides: [],
+    paused: false,
+    lastUpdatedAt: new Date('2024-06-01T00:00:00Z').toISOString(),
+    updatedBy: 'system',
+    defaultVersion: DEFAULT_SCHEDULE_VERSION,
+  };
+
+  await seedSchedule(scheduleDocument);
+  const { getNextRun } = loadService();
+
+  const referenceMoment = moment.tz(
+    '02-07-2024 16:00:12',
+    `${APP_DATE_FORMAT} HH:mm:ss`,
+    TIMEZONE
+  );
+
+  const nextRun = await getNextRun({
+    referenceMoment,
+    graceMs: 5 * 60 * 1000,
+  });
+
+  assert.ok(nextRun, 'expected run information within the grace window');
+  assert.equal(
+    nextRun.targetMoment.clone().tz(TIMEZONE).format(`${APP_DATE_FORMAT} HH:mm`),
+    '02-07-2024 16:00'
   );
 });

@@ -1,9 +1,10 @@
 services:
   backend:
+    container_name: sigap_backend
     build:
       context: ./backend
     env_file:
-      - ${BACKEND_ENV_FILE:-./backend/.env.local}
+      - ${BACKEND_ENV_FILE:-./backend/.env}
     ports:
       - "3301:3301"
     volumes:
@@ -12,6 +13,7 @@ services:
     restart: unless-stopped
 
   frontend:
+    container_name: sigap_frontend
     build:
       context: ./frontend
       args:
@@ -19,7 +21,6 @@ services:
     depends_on:
       - backend
     environment:
-      # Override via FRONTEND_BACKEND_HOST/FRONTEND_BACKEND_PORT to point at an external backend.
       BACKEND_HOST: ${FRONTEND_BACKEND_HOST:-backend}
       BACKEND_PORT: ${FRONTEND_BACKEND_PORT:-3301}
     ports:
