@@ -27,6 +27,8 @@ let isRestarting = false;
 let manualStopInProgress = false;
 let isClientReady = false;
 let statusCheckerInterval = null;
+let lastHealthyAt = null;
+let consecutiveStateWarnings = 0;
 
 let firstBoot = true;
 let readyInterval = null;
@@ -34,6 +36,9 @@ let readyDeadlineAt = null;
 
 const COLD_READY_MS = 5 * 60 * 1000;
 const WARM_READY_MS = 2 * 60 * 1000;
+const TRANSIENT_STATES = new Set(["OPENING", "PAIRING", "UNPAIRED_IDLE", "UNLAUNCHED"]);
+const TRANSIENT_GRACE_MS = 3 * 60 * 1000;
+const MAX_STATE_WARNINGS_BEFORE_RESTART = 3;
 
 function armReadyDeadline(label) {
   const ms = firstBoot ? COLD_READY_MS : WARM_READY_MS;
@@ -83,6 +88,20 @@ function clearReadyDeadline() {
   readyDeadlineAt = null;
   clearInterval(readyInterval);
   readyInterval = null;
+}
+
+function markClientHealthy(reason) {
+  lastHealthyAt = Date.now();
+  consecutiveStateWarnings = 0;
+
+  if (BOT_VERBOSE_LOGS && reason) {
+    logAdmin(`[Debug] Client sehat (${reason}).`);
+  }
+}
+
+function resetClientHealth() {
+  lastHealthyAt = null;
+  consecutiveStateWarnings = 0;
 }
 
 // --- Status helpers ---
@@ -169,6 +188,9 @@ async function startBot() {
 
   client.on("change_state", (state) => {
     bumpReadyDeadline("change_state");
+    if (state === "CONNECTED") {
+      markClientHealthy("change_state CONNECTED");
+    }
     if (!BOT_VERBOSE_LOGS) return;
     logAdmin(`[Bot] State berubah: ${state}`);
   });
@@ -200,6 +222,7 @@ async function startBot() {
     logPublic("[Bot] WhatsApp Client is ready!");
     emitQrUpdate(null);
     updateBotStatus({ active: true, phase: "ready" });
+    markClientHealthy("ready-event");
     startHeartbeat(logAdmin, logPublic, TIMEZONE, moment);
 
     startClientStatusChecker();
@@ -210,6 +233,7 @@ async function startBot() {
   client.on("auth_failure", async (e) => {
     firstBoot = true;
     clearReadyDeadline();
+    resetClientHealth();
     logAdmin(`[Sistem] Autentikasi gagal${e ? `: ${e}` : ""}. Reset sesi...`);
     logPublic("[Sistem] Autentikasi WhatsApp gagal. Menunggu pemindaian ulang.");
     try {
@@ -234,6 +258,7 @@ async function startBot() {
 
   client.on("disconnected", async (reason) => {
     clearReadyDeadline();
+    resetClientHealth();
 
     if (manualStopInProgress) {
       logAdmin(
@@ -307,6 +332,7 @@ async function startBot() {
     logPublic("[Sistem] Bot aktif.");
   } catch (err) {
     clearReadyDeadline();
+    resetClientHealth();
     logAdmin(`[Sistem] Gagal inisialisasi client: ${err.message}`);
     logPublic("[Sistem] Bot gagal inisialisasi. Menunggu tindakan administrator.");
     client = null;
@@ -342,6 +368,10 @@ async function stopBot(logPartsArg, optionsArg) {
       logAdmin("[Sistem] Menghentikan heartbeat...");
     stopHeartbeat();
 
+    stopClientStatusChecker();
+    clearReadyDeadline();
+    resetClientHealth();
+
     if (logParts.bot) logAdmin("[Sistem] Bot belum aktif.");
     updateBotStatus({ active: false, phase: nextPhase });
     return;
@@ -357,6 +387,7 @@ async function stopBot(logPartsArg, optionsArg) {
     stopClientStatusChecker();
 
     clearReadyDeadline();
+    resetClientHealth();
 
     if (manualStop) manualStopInProgress = true;
 
@@ -381,6 +412,9 @@ async function stopBot(logPartsArg, optionsArg) {
 
 function startClientStatusChecker(intervalMs = 60000) {
   if (statusCheckerInterval) clearInterval(statusCheckerInterval);
+
+  resetClientHealth();
+  markClientHealthy("status-check-start");
 
   const restartAfterSilentCrash = async () => {
     if (isRestarting) return;
@@ -416,15 +450,52 @@ function startClientStatusChecker(intervalMs = 60000) {
 
     try {
       const state = await client.getState();
-      if (state !== "CONNECTED") {
-        logAdmin(`[Sistem] Client state: ${state}. Restarting bot...`);
-        logPublic(
-          "[Sistem] Koneksi bot terputus. Mencoba memulihkan secara otomatis..."
-        );
-        await restartAfterSilentCrash();
+
+      if (state === "CONNECTED") {
+        markClientHealthy("getState CONNECTED");
+        return;
       }
+
+      const now = Date.now();
+      const msSinceHealthy = lastHealthyAt ? now - lastHealthyAt : Infinity;
+      const isTransient = TRANSIENT_STATES.has(state);
+      const withinTransientGrace =
+        isTransient && msSinceHealthy < TRANSIENT_GRACE_MS;
+
+      if (withinTransientGrace) {
+        consecutiveStateWarnings = 0;
+        if (BOT_VERBOSE_LOGS) {
+          const remaining = Math.max(
+            0,
+            Math.round((TRANSIENT_GRACE_MS - msSinceHealthy) / 1000)
+          );
+          logAdmin(
+            `[Debug] State ${state} masih transien, menunggu ${remaining}s sebelum restart.`
+          );
+        }
+        return;
+      }
+
+      consecutiveStateWarnings += 1;
+
+      if (consecutiveStateWarnings < MAX_STATE_WARNINGS_BEFORE_RESTART) {
+        if (BOT_VERBOSE_LOGS) {
+          logAdmin(
+            `[Debug] State ${state || "unknown"} (${consecutiveStateWarnings}/${MAX_STATE_WARNINGS_BEFORE_RESTART} peringatan) sebelum restart.`
+          );
+        }
+        return;
+      }
+
+      logAdmin(`[Sistem] Client state: ${state || "unknown"}. Restarting bot...`);
+      logPublic(
+        "[Sistem] Koneksi bot terputus. Mencoba memulihkan secara otomatis..."
+      );
+      resetClientHealth();
+      await restartAfterSilentCrash();
     } catch (err) {
       logAdmin(`[Sistem] Gagal cek client state: ${err.message}`);
+      resetClientHealth();
       await restartAfterSilentCrash();
     }
   }, intervalMs);

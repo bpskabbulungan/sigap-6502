@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # Pin to latest Node 20 release with current security patches
 FROM node:20.18.1-bookworm-slim AS base
 
@@ -6,7 +8,9 @@ ENV NODE_ENV=production
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-RUN apt-get update \
+RUN --mount=type=cache,target=/var/lib/apt/lists \
+  --mount=type=cache,target=/var/cache/apt \
+  apt-get update \
   && apt-get install -y --no-install-recommends \
     chromium \
     ca-certificates \
@@ -40,7 +44,8 @@ WORKDIR /app
 FROM base AS deps
 
 COPY package*.json ./
-RUN if [ -f package-lock.json ]; then \
+RUN --mount=type=cache,target=/root/.npm \
+  if [ -f package-lock.json ]; then \
       npm ci --omit=dev; \
     else \
       npm install --omit=dev; \
