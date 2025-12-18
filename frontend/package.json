@@ -15,8 +15,8 @@
     "@tanstack/react-query-devtools": "^5.89.0",
     "clsx": "^2.1.1",
     "lucide-react": "0.544.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "react-router-dom": "^7.9.1",
     "socket.io-client": "4.7.5",
     "sweetalert2": "^11.23.0"
@@ -24,8 +24,8 @@
   "devDependencies": {
     "@eslint/js": "^9.35.0",
     "@tailwindcss/postcss": "^4.1.13",
-    "@types/react": "^19.1.13",
-    "@types/react-dom": "^19.1.9",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.0.2",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.35.0",

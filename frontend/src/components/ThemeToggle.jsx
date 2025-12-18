@@ -40,7 +40,9 @@ export function ThemeToggle({ className = "" }) {
 
     try {
       localStorage.setItem("sigap_theme", theme);
-    } catch {}
+    } catch {
+      // Ignore storage errors (e.g. private mode)
+    }
 
     if (!prefersReduced) {
       root.classList.add("theme-animate");

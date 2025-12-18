@@ -6,7 +6,7 @@ function initSocket(io) {
   ioInstance = io;
 
   io.on("connection", (socket) => {
-    console.log("[Socket.IO] 🔌 Koneksi client:", socket.id);
+    console.log("[Socket.IO] Client connected:", socket.id);
 
     // Kirim status dan QR saat konek
     socket.emit("status-update", currentStatus);
@@ -15,7 +15,7 @@ function initSocket(io) {
     }
 
     socket.on("disconnect", () => {
-      console.log("[Socket.IO] 🔌 Client disconnect:", socket.id);
+      console.log("[Socket.IO] Client disconnect:", socket.id);
     });
   });
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../queries/auth";
 import {
@@ -89,9 +89,14 @@ export default function AdminQuotesPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [modalOpen, createMutation.isLoading, updateMutation.isLoading]);
+  }, [
+    modalOpen,
+    createMutation.isLoading,
+    updateMutation.isLoading,
+    handleSubmit,
+  ]);
 
-  const quotes = data?.quotes || [];
+  const quotes = useMemo(() => data?.quotes || [], [data]);
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     if (!q) return quotes;
@@ -134,42 +139,45 @@ export default function AdminQuotesPage() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setContentTouched(true);
-    const body = content.trim();
-    if (!body) {
-      textareaRef.current?.focus();
-      return;
-    }
-    if (editing) {
-      updateMutation.mutate(
-        { id: editing.id, content: body },
-        {
-          onSuccess: () => {
-            setModalOpen(false);
-            setContentTouched(false);
-            addToast("Quote diperbarui.", { type: "success" });
-          },
-          onError: (err) =>
-            addToast(err?.message || "Gagal menyimpan.", { type: "error" }),
-        }
-      );
-    } else {
-      createMutation.mutate(
-        { content: body },
-        {
-          onSuccess: () => {
-            setModalOpen(false);
-            setContentTouched(false);
-            addToast("Quote ditambahkan.", { type: "success" });
-          },
-          onError: (err) =>
-            addToast(err?.message || "Gagal menambah.", { type: "error" }),
-        }
-      );
-    }
-  };
+  const handleSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      setContentTouched(true);
+      const body = content.trim();
+      if (!body) {
+        textareaRef.current?.focus();
+        return;
+      }
+      if (editing) {
+        updateMutation.mutate(
+          { id: editing.id, content: body },
+          {
+            onSuccess: () => {
+              setModalOpen(false);
+              setContentTouched(false);
+              addToast("Quote diperbarui.", { type: "success" });
+            },
+            onError: (err) =>
+              addToast(err?.message || "Gagal menyimpan.", { type: "error" }),
+          }
+        );
+      } else {
+        createMutation.mutate(
+          { content: body },
+          {
+            onSuccess: () => {
+              setModalOpen(false);
+              setContentTouched(false);
+              addToast("Quote ditambahkan.", { type: "success" });
+            },
+            onError: (err) =>
+              addToast(err?.message || "Gagal menambah.", { type: "error" }),
+          }
+        );
+      }
+    },
+    [addToast, content, createMutation, editing, updateMutation]
+  );
 
   const handleDelete = async (q) => {
     const ok = await confirm({

@@ -27,6 +27,7 @@ export function ConfirmProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useConfirm() {
   return useContext(ConfirmContext);
 }

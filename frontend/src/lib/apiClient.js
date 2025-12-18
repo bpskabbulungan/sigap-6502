@@ -10,13 +10,13 @@ function resolveDefaultBaseUrl() {
 }
 
 const viteEnv = typeof import.meta !== "undefined" ? import.meta.env : undefined;
-const processEnvBaseUrl =
-  typeof process !== "undefined" && process?.env
-    ? process.env.VITE_API_BASE_URL
+const processEnv =
+  typeof globalThis !== "undefined" && globalThis.process?.env
+    ? globalThis.process.env
     : undefined;
 const rawBaseUrl =
   (viteEnv && viteEnv.VITE_API_BASE_URL) ||
-  processEnvBaseUrl ||
+  (processEnv && processEnv.VITE_API_BASE_URL) ||
   resolveDefaultBaseUrl();
 const API_BASE_URL = rawBaseUrl.replace(/\/$/, "");
 

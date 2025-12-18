@@ -52,9 +52,7 @@ function handleHeartbeatTick() {
     const sinceText = diffMinutes > 0 ? ` (selang ${diffMinutes} menit sejak heartbeat terakhir)` : "";
     const timestamp = formatTimestamp();
 
-    logToAudiences(
-      `[Heartbeat] 💓 Sistem aktif${sinceText} — ${timestamp}`
-    );
+    logToAudiences(`[Heartbeat] Sistem aktif${sinceText} @ ${timestamp}`);
 
     lastHeartbeatTime = now;
   });
@@ -67,10 +65,10 @@ async function handleQuoteTick() {
 
   try {
     const quote = await getRandomQuote();
-    logToAudiences(`[Quote] 💬 ${quote} — ${timestamp}`);
+    logToAudiences(`[Quote] ${quote} @ ${timestamp}`);
   } catch (err) {
-    const adminMessage = `[Quote] ⚠️ Gagal memuat kutipan acak — ${timestamp}. ${err?.message || err}`;
-    const publicMessage = `[Quote] ⚠️ Gagal memuat kutipan acak. Akan mencoba lagi nanti — ${timestamp}`;
+    const adminMessage = `[Quote] Gagal memuat kutipan acak @ ${timestamp}. ${err?.message || err}`;
+    const publicMessage = `[Quote] Gagal memuat kutipan acak. Akan mencoba lagi nanti @ ${timestamp}`;
 
     withContext(({ logAdmin, logPublic }) => {
       if (typeof logAdmin === "function") logAdmin(adminMessage, "warn");

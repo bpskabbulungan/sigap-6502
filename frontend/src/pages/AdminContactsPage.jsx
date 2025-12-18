@@ -64,8 +64,11 @@ export default function AdminContactsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  const contacts = data?.contacts ?? [];
-  const allowedStatuses = data?.allowedStatuses ?? ["masuk"];
+  const contacts = useMemo(() => data?.contacts ?? [], [data]);
+  const allowedStatuses = useMemo(
+    () => data?.allowedStatuses ?? ["masuk"],
+    [data]
+  );
 
   useEffect(() => {
     if (!sessionLoading && !session?.authenticated) {

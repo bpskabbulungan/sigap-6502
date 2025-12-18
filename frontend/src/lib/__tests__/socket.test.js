@@ -1,10 +1,15 @@
+/* eslint-env node */
 import test from "node:test";
 import assert from "node:assert/strict";
 
 const nestedBaseUrl = "https://domain.example/app";
 
 test("websocket connections target bare origin when API base has path", async (t) => {
-  process.env.VITE_API_BASE_URL = nestedBaseUrl;
+  const env = globalThis.process?.env;
+  if (!env) {
+    throw new Error("process.env unavailable in test environment");
+  }
+  env.VITE_API_BASE_URL = nestedBaseUrl;
 
   const {
     getSocket,
@@ -17,7 +22,7 @@ test("websocket connections target bare origin when API base has path", async (t
   t.after(() => {
     closeSocket();
     resetSocketFactory();
-    delete process.env.VITE_API_BASE_URL;
+    delete env.VITE_API_BASE_URL;
   });
 
   const calls = [];

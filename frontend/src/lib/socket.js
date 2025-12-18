@@ -33,8 +33,16 @@ export function getSocket() {
 
 export function closeSocket() {
   if (socketInstance) {
-    try { socketInstance.removeAllListeners(); } catch (_) {}
-    try { socketInstance.disconnect(); } catch (_) {}
+    try {
+      socketInstance.removeAllListeners();
+    } catch {
+      // Ignore cleanup errors
+    }
+    try {
+      socketInstance.disconnect();
+    } catch {
+      // Ignore cleanup errors
+    }
     socketInstance = null;
   }
 }
@@ -49,4 +57,3 @@ export function resetSocketFactory() {
 
 // Exported for testing
 export { resolveSocketOrigin };
-

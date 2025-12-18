@@ -13,6 +13,7 @@ const { emitStatusUpdate, emitQrUpdate } = require("../utils/socketHandler");
 const { TIMEZONE } = require("../utils/calendar");
 
 const BOT_VERBOSE_LOGS = process.env.BOT_VERBOSE_LOGS !== "false";
+const WA_WEB_VERSION = (process.env.WA_WEB_VERSION || "").trim();
 
 const logAdmin = (message, level = "info", options = {}) =>
   addLog(message, level, { audience: options.audience || LOG_AUDIENCES.ADMIN, ...options });
@@ -34,11 +35,11 @@ let firstBoot = true;
 let readyInterval = null;
 let readyDeadlineAt = null;
 
-const COLD_READY_MS = 5 * 60 * 1000;
-const WARM_READY_MS = 2 * 60 * 1000;
+const COLD_READY_MS = 3 * 60 * 1000;
+const WARM_READY_MS = 90 * 1000;
 const TRANSIENT_STATES = new Set(["OPENING", "PAIRING", "UNPAIRED_IDLE", "UNLAUNCHED"]);
-const TRANSIENT_GRACE_MS = 3 * 60 * 1000;
-const MAX_STATE_WARNINGS_BEFORE_RESTART = 3;
+const TRANSIENT_GRACE_MS = 90 * 1000;
+const MAX_STATE_WARNINGS_BEFORE_RESTART = 2;
 
 function armReadyDeadline(label) {
   const ms = firstBoot ? COLD_READY_MS : WARM_READY_MS;
@@ -163,11 +164,16 @@ async function startBot() {
   };
 
   if (RemoteWebCache) {
-    clientOpts.webVersionCache = new RemoteWebCache({
+    const cache = new RemoteWebCache({
       remotePath:
         "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html",
       strict: false,
     });
+    clientOpts.webVersionCache = cache;
+  }
+
+  if (WA_WEB_VERSION) {
+    clientOpts.webVersion = WA_WEB_VERSION;
   }
 
   client = new Client(clientOpts);
@@ -297,6 +303,11 @@ async function startBot() {
   // --- Initialize ---
   try {
     logPublic("[Sistem] Inisialisasi WhatsApp client...");
+    if (WA_WEB_VERSION) {
+      logAdmin(`[Sistem] Memakai WA Web version ${WA_WEB_VERSION}.`);
+    } else {
+      logAdmin("[Sistem] WA Web mengikuti cache otomatis (tidak dipaksa).");
+    }
     try {
       await client.initialize();
     } catch (e) {
