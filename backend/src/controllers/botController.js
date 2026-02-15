@@ -34,9 +34,16 @@ let consecutiveStateWarnings = 0;
 let firstBoot = true;
 let readyInterval = null;
 let readyDeadlineAt = null;
+let authStateInterval = null;
 
-const COLD_READY_MS = 3 * 60 * 1000;
-const WARM_READY_MS = 90 * 1000;
+const COLD_READY_MS = (() => {
+  const raw = parseInt(process.env.BOT_READY_TIMEOUT_MS || "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 3 * 60 * 1000;
+})();
+const WARM_READY_MS = (() => {
+  const raw = parseInt(process.env.BOT_READY_TIMEOUT_WARM_MS || "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 90 * 1000;
+})();
 const TRANSIENT_STATES = new Set(["OPENING", "PAIRING", "UNPAIRED_IDLE", "UNLAUNCHED"]);
 const TRANSIENT_GRACE_MS = 90 * 1000;
 const MAX_STATE_WARNINGS_BEFORE_RESTART = 2;
@@ -91,6 +98,13 @@ function clearReadyDeadline() {
   readyInterval = null;
 }
 
+function stopAuthStatePolling() {
+  if (authStateInterval) {
+    clearInterval(authStateInterval);
+    authStateInterval = null;
+  }
+}
+
 function markClientHealthy(reason) {
   lastHealthyAt = Date.now();
   consecutiveStateWarnings = 0;
@@ -103,6 +117,43 @@ function markClientHealthy(reason) {
 function resetClientHealth() {
   lastHealthyAt = null;
   consecutiveStateWarnings = 0;
+}
+
+function handleReady(source = "ready-event") {
+  if (isClientReady) return;
+  clearReadyDeadline();
+  stopAuthStatePolling();
+  isClientReady = true;
+  firstBoot = false;
+  latestQR = null;
+  logPublic(`[Bot] WhatsApp Client is ready! (${source})`);
+  emitQrUpdate(null);
+  updateBotStatus({ active: true, phase: "ready" });
+  markClientHealthy(source);
+  startHeartbeat(logAdmin, logPublic, TIMEZONE, moment);
+  startClientStatusChecker();
+  startScheduler(client, addLog);
+}
+
+function startAuthStatePolling() {
+  stopAuthStatePolling();
+  let pollCount = 0;
+  authStateInterval = setInterval(async () => {
+    if (!client || isClientReady) return;
+    pollCount += 1;
+    try {
+      const state = await client.getState();
+      logAdmin(`[Debug] Auth poll state: ${state || "unknown"} (#${pollCount})`);
+      if (state === "CONNECTED") {
+        logAdmin("[Sistem] Deteksi CONNECTED saat auth. Menandai bot siap.");
+        handleReady("state-connected");
+      }
+    } catch (err) {
+      logAdmin(
+        `[Debug] Auth poll gagal: ${err.message || String(err)} (#${pollCount})`
+      );
+    }
+  }, 10000);
 }
 
 // --- Status helpers ---
@@ -203,6 +254,7 @@ async function startBot() {
 
   client.on("qr", (qr) => {
     clearReadyDeadline();
+    stopAuthStatePolling();
     if (latestQR !== qr) {
       latestQR = qr;
       updateBotStatus({ active: false, phase: "waiting-qr" });
@@ -218,27 +270,17 @@ async function startBot() {
     updateBotStatus({ active: false, phase: "authenticated" });
     emitQrUpdate(null);
     armReadyDeadline("post-auth");
+    startAuthStatePolling();
   });
 
   client.on("ready", async () => {
-    clearReadyDeadline();
-    isClientReady = true;
-    firstBoot = false;
-    latestQR = null;
-    logPublic("[Bot] WhatsApp Client is ready!");
-    emitQrUpdate(null);
-    updateBotStatus({ active: true, phase: "ready" });
-    markClientHealthy("ready-event");
-    startHeartbeat(logAdmin, logPublic, TIMEZONE, moment);
-
-    startClientStatusChecker();
-
-    startScheduler(client, addLog);
+    handleReady("ready-event");
   });
 
   client.on("auth_failure", async (e) => {
     firstBoot = true;
     clearReadyDeadline();
+    stopAuthStatePolling();
     resetClientHealth();
     logAdmin(`[Sistem] Autentikasi gagal${e ? `: ${e}` : ""}. Reset sesi...`);
     logPublic("[Sistem] Autentikasi WhatsApp gagal. Menunggu pemindaian ulang.");
@@ -264,6 +306,7 @@ async function startBot() {
 
   client.on("disconnected", async (reason) => {
     clearReadyDeadline();
+    stopAuthStatePolling();
     resetClientHealth();
 
     if (manualStopInProgress) {
@@ -343,6 +386,7 @@ async function startBot() {
     logPublic("[Sistem] Bot aktif.");
   } catch (err) {
     clearReadyDeadline();
+    stopAuthStatePolling();
     resetClientHealth();
     logAdmin(`[Sistem] Gagal inisialisasi client: ${err.message}`);
     logPublic("[Sistem] Bot gagal inisialisasi. Menunggu tindakan administrator.");
@@ -381,6 +425,7 @@ async function stopBot(logPartsArg, optionsArg) {
 
     stopClientStatusChecker();
     clearReadyDeadline();
+    stopAuthStatePolling();
     resetClientHealth();
 
     if (logParts.bot) logAdmin("[Sistem] Bot belum aktif.");
@@ -398,6 +443,7 @@ async function stopBot(logPartsArg, optionsArg) {
     stopClientStatusChecker();
 
     clearReadyDeadline();
+    stopAuthStatePolling();
     resetClientHealth();
 
     if (manualStop) manualStopInProgress = true;

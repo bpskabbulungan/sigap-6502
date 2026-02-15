@@ -17,9 +17,12 @@ const { isBotActive, getClient } = require('./controllers/botController');
 const { startScheduler, stopScheduler } = require('./controllers/schedulerController');
 const { stopHeartbeat } = require('./utils/heartbeat');
 const { cleanupWwebjsProfileLocks } = require('./utils/chromeProfile');
+const { startLogCleanupScheduler } = require('./utils/logCleanup');
 
 const logAdmin = (message, level = 'info') =>
   addLog(message, level, { audience: LOG_AUDIENCES.ADMIN });
+
+startLogCleanupScheduler(logAdmin, { daysToKeep: 14 });
 
 // Proactively clean Chromium profile locks on startup (safe if none exist)
 try {

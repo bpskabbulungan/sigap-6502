@@ -4,6 +4,8 @@
 FROM node:20.18.1-bookworm-slim AS base
 
 ENV NODE_ENV=production
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 
 RUN --mount=type=cache,target=/var/lib/apt/lists \
   --mount=type=cache,target=/var/cache/apt \
