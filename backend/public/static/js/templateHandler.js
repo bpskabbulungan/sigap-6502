@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
   saveBtn.addEventListener("click", async () => {
     const confirm = await Swal.fire({
       title: "Simpan Perubahan?",
-      text: "Template akan diperbarui.",
+      text: "Templat akan diperbarui.",
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "Ya, simpan",
@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
       Swal.fire({
         icon: "success",
         title: "Berhasil",
-        text: "Template berhasil disimpan.",
+        text: "Templat berhasil disimpan.",
         timer: 1500,
         showConfirmButton: false,
       });

@@ -6,15 +6,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SIGAP Dashboard</title>
     <script>
-      (function setTheme(){
+      (function setInitialTheme() {
         try {
-          var saved = localStorage.getItem('sigap_theme');
-          var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-          var useLight = saved ? saved === 'light' : prefersLight;
+          var key = "sigap_theme";
+          var stored = localStorage.getItem(key);
+          var resolved = stored === "dark" || stored === "light" ? stored : "light";
           var root = document.documentElement;
-          root.classList.remove('theme-light','theme-dark');
-          root.classList.add(useLight ? 'theme-light' : 'theme-dark');
-        } catch(e) {}
+
+          root.classList.toggle("dark", resolved === "dark");
+          root.classList.toggle("theme-dark", resolved === "dark");
+          root.classList.toggle("theme-light", resolved === "light");
+          root.dataset.theme = resolved;
+          root.style.colorScheme = resolved;
+        } catch (error) {
+          // ignore theme bootstrap errors
+        }
       })();
     </script>
   </head>

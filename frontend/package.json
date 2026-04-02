@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test"
+    "test": "node --test",
+    "test:visual": "npm run build && playwright test -c playwright.config.js",
+    "test:visual:update": "npm run build && playwright test -c playwright.config.js --update-snapshots"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.89.0",
@@ -17,12 +19,13 @@
     "lucide-react": "0.544.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-router-dom": "^7.9.1",
-    "socket.io-client": "4.7.5",
+    "react-router-dom": "^7.13.2",
+    "socket.io-client": "^4.8.3",
     "sweetalert2": "^11.23.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.1.13",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

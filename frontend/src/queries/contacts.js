@@ -52,12 +52,40 @@ export function useUpdateContactStatus() {
   });
 }
 
+export function useBulkUpdateContactStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, status }) =>
+      apiRequest('/api/admin/contacts/bulk-status', {
+        method: 'PATCH',
+        body: { ids, status },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CONTACTS_QUERY_KEY });
+    },
+  });
+}
+
 export function useDeleteContact() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id) =>
       apiRequest(`/api/admin/contacts/${id}`, {
         method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CONTACTS_QUERY_KEY });
+    },
+  });
+}
+
+export function useBulkDeleteContacts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids) =>
+      apiRequest('/api/admin/contacts/bulk-delete', {
+        method: 'POST',
+        body: { ids },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: CONTACTS_QUERY_KEY });

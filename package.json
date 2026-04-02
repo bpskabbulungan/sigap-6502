@@ -1,8 +1,8 @@
 {
-  "name": "wa-reminder-workspace",
+  "name": "sigap-6502-workspace",
   "private": true,
   "version": "1.0.0",
-  "description": "Workspace for WA Reminder backend and frontend",
+  "description": "Workspace for SIGAP 6502 backend and frontend",
   "workspaces": [
     "backend",
     "frontend"
@@ -12,12 +12,13 @@
     "dev:backend": "npm --workspace backend run dev",
     "dev:frontend": "npm --workspace frontend run dev",
     "build": "npm --workspace backend run build && npm --workspace frontend run build",
-    "test": "npm --workspace backend run test",
-    "lint": "npm --workspace backend run lint",
+    "test": "npm --workspace backend run test && npm --workspace frontend run test",
+    "lint": "npm --workspace backend run lint && npm --workspace frontend run lint",
     "check:lf": "node scripts/check-shell-eol.js",
     "postinstall": "patch-package"
   },
   "devDependencies": {
+    "baseline-browser-mapping": "^2.10.13",
     "concurrently": "^9.0.0",
     "patch-package": "^8.0.0",
     "postinstall-postinstall": "^2.1.0"

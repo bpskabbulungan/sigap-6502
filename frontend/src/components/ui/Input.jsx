@@ -1,55 +1,81 @@
+import { forwardRef } from "react";
 import clsx from "clsx";
 
 const baseStyles =
-  "block w-full rounded-xl border bg-slate-900/60 text-slate-100 shadow-inner shadow-black/40 placeholder:text-slate-500 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 transition";
+  "block w-full rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground shadow-sm transition-[border-color,background-color,color,box-shadow] duration-200 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/25 disabled:cursor-not-allowed disabled:opacity-60";
 
 const variants = {
-  default: "border-white/10 focus:border-primary-400 focus:ring-primary-500/40",
-  error: "border-rose-500/40 focus:border-rose-400 focus:ring-rose-500/40",
-  success:
-    "border-emerald-500/30 focus:border-emerald-400 focus:ring-emerald-500/40",
+  default: "border-input focus:border-ring",
+  error:
+    "border-destructive/55 focus:border-destructive focus:ring-destructive/25",
+  success: "border-success/55 focus:border-success focus:ring-success/25",
 };
 
 const sizes = {
-  sm: "px-3 py-1.5 text-xs",
-  md: "px-4 py-2 text-sm",
-  lg: "px-5 py-3 text-base",
+  sm: "h-9 px-3 text-xs",
+  md: "h-10 px-3.5 text-sm",
+  lg: "h-12 px-4 text-base",
 };
 
-export function Input({
-  className,
-  variant = "default",
-  size = "md",
-  prefix,
-  suffix,
-  ...props
-}) {
-  // Jika ada prefix/suffix kita bungkus dengan flex container
+const wrapperSizes = {
+  sm: "h-9 px-3 text-xs",
+  md: "h-10 px-3.5 text-sm",
+  lg: "h-12 px-4 text-base",
+};
+
+const innerInputSizes = {
+  sm: "text-xs",
+  md: "text-sm",
+  lg: "text-base",
+};
+
+export const Input = forwardRef(function Input(
+  {
+    className,
+    variant = "default",
+    size = "md",
+    prefix,
+    suffix,
+    ...props
+  },
+  ref
+) {
+  const resolvedVariant = variants[variant] ? variant : "default";
+
   if (prefix || suffix) {
     return (
       <div
         className={clsx(
-          "flex items-center rounded-xl border bg-slate-900/60 shadow-inner shadow-black/40 focus-within:ring-2",
-          variants[variant],
-          sizes[size],
+          "flex w-full items-center gap-2 rounded-xl border border-input bg-background shadow-sm transition-[border-color,background-color,box-shadow] duration-200 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25",
+          variants[resolvedVariant],
+          wrapperSizes[size] ?? wrapperSizes.md,
           className
         )}
       >
-        {prefix && <span className="mr-2 text-slate-400">{prefix}</span>}
+        {prefix ? <span className="shrink-0 text-muted-foreground">{prefix}</span> : null}
         <input
-          className="flex-1 bg-transparent outline-none placeholder:text-slate-500 text-slate-100"
+          ref={ref}
+          className={clsx(
+            "min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground",
+            innerInputSizes[size] ?? innerInputSizes.md
+          )}
           {...props}
         />
-        {suffix && <span className="ml-2 text-slate-400">{suffix}</span>}
+        {suffix ? <span className="shrink-0 text-muted-foreground">{suffix}</span> : null}
       </div>
     );
   }
 
-  // Tanpa prefix/suffix
   return (
     <input
-      className={clsx(baseStyles, variants[variant], sizes[size], className)}
+      ref={ref}
+      className={clsx(
+        baseStyles,
+        variants[resolvedVariant],
+        sizes[size] ?? sizes.md,
+        className
+      )}
       {...props}
     />
   );
-}
+});

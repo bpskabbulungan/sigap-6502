@@ -6,6 +6,8 @@ services:
       context: ./backend
     env_file:
       - ${BACKEND_ENV_FILE:-./backend/.env}
+    environment:
+      WEB_APP_URL: ${BACKEND_WEB_APP_URL:-http://localhost:3302}
     ports:
       - "3301:3301"
     volumes:

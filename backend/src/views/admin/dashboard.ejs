@@ -38,7 +38,7 @@
           (<%= nextRun.timezone %>)
         </p>
         <% if (nextRun.override) { %>
-        <p class="override">Override manual: <%= formatIsoDateId(nextRun.override.date) %> jam <%= nextRun.override.time %></p>
+        <p class="override">Pengumuman terjadwal: <%= formatIsoDateId(nextRun.override.date) %> jam <%= nextRun.override.time %></p>
         <% } %>
         <% } else { %>
         <p class="next-run">Belum ada jadwal aktif.</p>
@@ -76,12 +76,13 @@
     </section>
 
     <section class="card">
-      <h2>Override Manual</h2>
-      <% if (schedule.manualOverrides.length === 0) { %>
-      <p>Tidak ada override manual aktif.</p>
+      <h2>Pengumuman Terjadwal</h2>
+      <% const activeAnnouncements = schedule.manualOverrides.filter((item) => !item.consumedAt); %>
+      <% if (activeAnnouncements.length === 0) { %>
+      <p>Tidak ada pengumuman terjadwal aktif.</p>
       <% } else { %>
       <ul class="override-list">
-        <% schedule.manualOverrides.forEach((item) => { %>
+        <% activeAnnouncements.forEach((item) => { %>
         <li>
           <strong><%= formatIsoDateId(item.date) %></strong> - <%= item.time %>
           <% if (item.note) { %>

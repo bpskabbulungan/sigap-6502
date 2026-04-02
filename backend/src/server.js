@@ -57,7 +57,7 @@ initSocket(io);
 attachSocket(app, io);
 
 server.listen(config.port, () => {
-  logAdmin(`[Sistem] Aplikasi berjalan di port ${config.port}`);
+  logAdmin('[Sistem] Aplikasi berjalan. Menunggu bot start.');
 });
 
 setTimeout(() => {

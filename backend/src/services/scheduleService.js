@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const moment = require('moment-timezone');
@@ -6,8 +6,8 @@ const { v4: uuid } = require('uuid');
 
 const config = require('../config/env');
 const { setupLogger } = require('../utils/logger');
+const { withFileLock } = require('../utils/fileMutex');
 const {
-  APP_DATE_FORMAT,
   APP_DATE_REGEX,
   compareAppDates,
   normalizeAppDate,
@@ -23,6 +23,11 @@ const CONFIG_PATH = path.join(STORAGE_DIR, CONFIG_FILENAME);
 const TIME_PATTERN = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
 const LEGACY_DEFAULT_VERSION = 'legacy';
+const TIMEZONE_VALIDATION_MESSAGE =
+  'Timezone tidak valid. Gunakan timezone IANA, misalnya Asia/Makassar.';
+const DEFAULT_MESSAGE_MODE = 'default-template';
+const CUSTOM_MESSAGE_MODE = 'custom-message';
+const CUSTOM_MESSAGE_MAX_LENGTH = 4000;
 
 const DEFAULT_SCHEDULE = {
   timezone: config.scheduler.defaultSchedule.timezone,
@@ -33,6 +38,29 @@ const DEFAULT_SCHEDULE = {
   updatedBy: 'system',
   defaultVersion: config.scheduler.defaultSchedule.defaultVersion || 'v1',
 };
+
+function withScheduleLock(task) {
+  return withFileLock(CONFIG_PATH, task);
+}
+
+function createValidationError(message) {
+  const error = new Error(message);
+  error.status = 400;
+  return error;
+}
+
+function isValidIanaTimezone(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  const timezone = value.trim();
+  if (!timezone) {
+    return false;
+  }
+
+  return Boolean(moment.tz.zone(timezone));
+}
 
 function normalizeDailyTimes(dailyTimes = {}) {
   return Object.entries(dailyTimes).reduce((acc, [key, value]) => {
@@ -81,7 +109,59 @@ function getAutoUpgradeReason(schedule) {
   return null;
 }
 
+function normalizeMessageMode(rawMode, rawCustomMessage) {
+  if (rawMode === CUSTOM_MESSAGE_MODE) {
+    return CUSTOM_MESSAGE_MODE;
+  }
+
+  if (typeof rawCustomMessage === 'string' && rawCustomMessage.trim()) {
+    return CUSTOM_MESSAGE_MODE;
+  }
+
+  return DEFAULT_MESSAGE_MODE;
+}
+
+function sanitizeCustomMessage(rawMessage, mode) {
+  if (mode !== CUSTOM_MESSAGE_MODE) {
+    return null;
+  }
+
+  if (typeof rawMessage !== 'string') {
+    return null;
+  }
+
+  const trimmed = rawMessage.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.slice(0, CUSTOM_MESSAGE_MAX_LENGTH);
+}
+
+function compareManualOverrides(a, b) {
+  const byDate = compareAppDates(a.date, b.date);
+  if (byDate !== 0) {
+    return byDate;
+  }
+
+  if (a.time < b.time) {
+    return -1;
+  }
+
+  if (a.time > b.time) {
+    return 1;
+  }
+
+  return 0;
+}
+
 function sanitizeSchedule(raw) {
+  const sourceManualOverrides = Array.isArray(raw?.manualOverrides)
+    ? raw.manualOverrides
+    : Array.isArray(raw?.manualAnnouncements)
+    ? raw.manualAnnouncements
+    : [];
+
   const schedule = {
     ...DEFAULT_SCHEDULE,
     ...raw,
@@ -89,10 +169,14 @@ function sanitizeSchedule(raw) {
       ...DEFAULT_SCHEDULE.dailyTimes,
       ...(raw?.dailyTimes || {}),
     },
-    manualOverrides: Array.isArray(raw?.manualOverrides)
-      ? raw.manualOverrides
-      : [],
+    manualOverrides: sourceManualOverrides,
   };
+
+  const configuredTimezone =
+    typeof schedule.timezone === 'string' ? schedule.timezone.trim() : '';
+  schedule.timezone = isValidIanaTimezone(configuredTimezone)
+    ? configuredTimezone
+    : DEFAULT_SCHEDULE.timezone;
 
   const providedVersion = raw?.defaultVersion;
   schedule.defaultVersion =
@@ -101,11 +185,16 @@ function sanitizeSchedule(raw) {
   schedule.manualOverrides = schedule.manualOverrides
     .map((item) => {
       const normalizedDate = normalizeAppDate(item.date);
+      const messageMode = normalizeMessageMode(item.messageMode, item.customMessage);
+      const customMessage = sanitizeCustomMessage(item.customMessage, messageMode);
+
       return {
         id: item.id || uuid(),
         date: normalizedDate,
         time: item.time,
         note: item.note || null,
+        messageMode,
+        customMessage,
         createdAt: item.createdAt || new Date().toISOString(),
         createdBy: item.createdBy || 'unknown',
         consumedAt: item.consumedAt || null,
@@ -115,9 +204,11 @@ function sanitizeSchedule(raw) {
       (item) =>
         APP_DATE_REGEX.test(item.date) &&
         TIME_PATTERN.test(item.time) &&
-        parseAppDate(item.date, schedule.timezone)
+        parseAppDate(item.date, schedule.timezone) &&
+        (item.messageMode !== CUSTOM_MESSAGE_MODE ||
+          (typeof item.customMessage === 'string' && item.customMessage.trim()))
     )
-    .sort((a, b) => compareAppDates(a.date, b.date));
+    .sort(compareManualOverrides);
 
   const autoUpgradeReason = getAutoUpgradeReason(schedule);
 
@@ -205,12 +296,6 @@ function resolveDailyTime(schedule, weekday) {
   return schedule.dailyTimes[String(weekday)] ?? schedule.dailyTimes[weekday] ?? null;
 }
 
-function findActiveOverride(schedule, dateKey) {
-  return schedule.manualOverrides.find(
-    (item) => item.date === dateKey && !item.consumedAt
-  );
-}
-
 function pruneOverrides(schedule, referenceMoment) {
   const keepThreshold = referenceMoment.clone().subtract(3, 'days').startOf('day');
 
@@ -227,104 +312,228 @@ function isUpcoming(targetMoment, referenceMoment, graceMs = 0) {
   return targetMoment.diff(referenceMoment) >= -positiveGrace;
 }
 
-async function getSchedule() {
+async function getScheduleUnsafe() {
   const schedule = await readSchedule();
   pruneOverrides(schedule, moment().tz(schedule.timezone));
   return schedule;
 }
 
-async function setSchedule(payload, options = {}) {
-  const schedule = await getSchedule();
-
-  if (typeof payload.paused === 'boolean') {
-    schedule.paused = payload.paused;
-  }
-
-  if (payload.timezone) {
-    schedule.timezone = payload.timezone;
-  }
-
-  if (payload.dailyTimes) {
-    Object.entries(payload.dailyTimes).forEach(([key, value]) => {
-      if (value === null || value === undefined || value === '') {
-        schedule.dailyTimes[key] = null;
-        return;
-      }
-
-      if (!TIME_PATTERN.test(value)) {
-        throw new Error(`Format waktu untuk hari ${key} tidak valid.`);
-      }
-
-      schedule.dailyTimes[key] = value;
-    });
-  }
-
-  if (options.updatedBy) {
-    schedule.updatedBy = options.updatedBy;
-  }
-
-  return writeSchedule(schedule);
+async function getSchedule() {
+  return withScheduleLock(() => getScheduleUnsafe());
 }
 
-async function addManualOverride({ date, time, note }, options = {}) {
-  const normalizedDate = normalizeAppDate(date);
+async function setSchedule(payload, options = {}) {
+  return withScheduleLock(async () => {
+    const schedule = await getScheduleUnsafe();
 
-  if (!normalizedDate || !APP_DATE_REGEX.test(normalizedDate)) {
-    throw new Error('Format tanggal harus DD-MM-YYYY');
-  }
-  if (!TIME_PATTERN.test(time)) {
-    throw new Error('Format waktu harus HH:mm');
-  }
+    if (typeof payload.paused === 'boolean') {
+      schedule.paused = payload.paused;
+    }
 
-  const schedule = await getSchedule();
-  const timezone = schedule.timezone;
-  const targetMoment = parseAppDateTime(normalizedDate, time, timezone);
+    if (typeof payload.timezone !== 'undefined') {
+      const timezone =
+        typeof payload.timezone === 'string' ? payload.timezone.trim() : '';
 
-  if (!targetMoment) {
-    throw new Error('Tanggal atau waktu tidak valid');
-  }
+      if (!isValidIanaTimezone(timezone)) {
+        throw createValidationError(TIMEZONE_VALIDATION_MESSAGE);
+      }
 
-  const existing = findActiveOverride(schedule, normalizedDate);
-  if (existing) {
-    existing.time = time;
-    existing.note = note || existing.note;
-    existing.createdBy = options.updatedBy || existing.createdBy;
-    existing.createdAt = existing.createdAt || new Date().toISOString();
-  } else {
+      schedule.timezone = timezone;
+    }
+
+    if (payload.dailyTimes) {
+      Object.entries(payload.dailyTimes).forEach(([key, value]) => {
+        if (value === null || value === undefined || value === '') {
+          schedule.dailyTimes[key] = null;
+          return;
+        }
+
+        if (!TIME_PATTERN.test(value)) {
+          throw new Error(`Format waktu untuk hari ${key} tidak valid.`);
+        }
+
+        schedule.dailyTimes[key] = value;
+      });
+    }
+
+    if (options.updatedBy) {
+      schedule.updatedBy = options.updatedBy;
+    }
+
+    return writeSchedule(schedule);
+  });
+}
+
+async function addManualOverride(
+  { date, time, note, messageMode, customMessage },
+  options = {}
+) {
+  return withScheduleLock(async () => {
+    const normalizedDate = normalizeAppDate(date);
+
+    if (!normalizedDate || !APP_DATE_REGEX.test(normalizedDate)) {
+      throw new Error('Format tanggal harus DD-MM-YYYY');
+    }
+    if (!TIME_PATTERN.test(time)) {
+      throw new Error('Format waktu harus HH:mm');
+    }
+
+    const schedule = await getScheduleUnsafe();
+    const timezone = schedule.timezone;
+    const targetMoment = parseAppDateTime(normalizedDate, time, timezone);
+
+    if (!targetMoment) {
+      throw new Error('Tanggal atau waktu tidak valid');
+    }
+
+    const defaultTimeForDay = resolveDailyTime(
+      schedule,
+      targetMoment.isoWeekday()
+    );
+    if (!schedule.paused && defaultTimeForDay && defaultTimeForDay === time) {
+      throw new Error(
+        'Waktu pengumuman bentrok dengan jadwal otomatis. Gunakan jam lain agar keduanya terkirim.'
+      );
+    }
+
+    const resolvedMode = normalizeMessageMode(messageMode, customMessage);
+    const sanitizedCustomMessage = sanitizeCustomMessage(
+      customMessage,
+      resolvedMode
+    );
+
+    if (resolvedMode === CUSTOM_MESSAGE_MODE && !sanitizedCustomMessage) {
+      throw new Error('Pesan custom wajib diisi untuk mode pesan custom.');
+    }
+
+    const existing = schedule.manualOverrides.find(
+      (item) =>
+        item.date === normalizedDate &&
+        item.time === time &&
+        !item.consumedAt
+    );
+
+    if (existing) {
+      throw new Error(
+        'Pengumuman terjadwal pada tanggal dan waktu tersebut sudah ada.'
+      );
+    }
+
     schedule.manualOverrides.push({
       id: uuid(),
       date: normalizedDate,
       time,
       note: note || null,
+      messageMode: resolvedMode,
+      customMessage: sanitizedCustomMessage,
       createdAt: new Date().toISOString(),
       createdBy: options.updatedBy || 'admin',
       consumedAt: null,
     });
-  }
 
-  schedule.manualOverrides.sort((a, b) => compareAppDates(a.date, b.date));
-  schedule.updatedBy = options.updatedBy || schedule.updatedBy;
+    schedule.manualOverrides.sort(compareManualOverrides);
+    schedule.updatedBy = options.updatedBy || schedule.updatedBy;
 
-  return writeSchedule(schedule);
+    return writeSchedule(schedule);
+  });
 }
 
-async function removeManualOverride(date) {
-  const schedule = await getSchedule();
-  const normalizedDate = normalizeAppDate(date);
-  schedule.manualOverrides = schedule.manualOverrides.filter(
-    (item) => item.date !== normalizedDate
+async function removeManualOverride(identifier) {
+  return withScheduleLock(async () => {
+    const schedule = await getScheduleUnsafe();
+    const normalizedDate = normalizeAppDate(identifier);
+    schedule.manualOverrides = schedule.manualOverrides.filter((item) => {
+      if (normalizedDate) {
+        return item.date !== normalizedDate;
+      }
+
+      return item.id !== identifier;
+    });
+    return writeSchedule(schedule);
+  });
+}
+
+function findActiveOverrideByIdentifier(schedule, identifier) {
+  if (!identifier) {
+    return null;
+  }
+
+  const normalizedDate = normalizeAppDate(identifier);
+  if (normalizedDate) {
+    return schedule.manualOverrides.find(
+      (item) => item.date === normalizedDate && !item.consumedAt
+    );
+  }
+
+  return schedule.manualOverrides.find(
+    (item) => item.id === identifier && !item.consumedAt
   );
-  return writeSchedule(schedule);
 }
 
-async function consumeManualOverride(date) {
-  const schedule = await getSchedule();
-  const normalizedDate = normalizeAppDate(date);
-  const override = findActiveOverride(schedule, normalizedDate);
-  if (override) {
-    override.consumedAt = new Date().toISOString();
-    await writeSchedule(schedule);
+async function consumeManualOverride(identifier) {
+  return withScheduleLock(async () => {
+    const schedule = await getScheduleUnsafe();
+    const override = findActiveOverrideByIdentifier(schedule, identifier);
+    if (override) {
+      override.consumedAt = new Date().toISOString();
+      await writeSchedule(schedule);
+    }
+  });
+}
+
+function findNextManualRun(schedule, tzReference, graceMs) {
+  let selected = null;
+
+  for (const item of schedule.manualOverrides) {
+    if (item.consumedAt) {
+      continue;
+    }
+
+    const dateMoment = parseAppDate(item.date, schedule.timezone);
+    if (!dateMoment) {
+      continue;
+    }
+
+    const targetMoment = parseTimeToMoment(dateMoment, item.time);
+    if (!isUpcoming(targetMoment, tzReference, graceMs)) {
+      continue;
+    }
+
+    if (!selected || targetMoment.isBefore(selected.targetMoment)) {
+      selected = {
+        override: item,
+        targetMoment,
+      };
+    }
   }
+
+  return selected;
+}
+
+function findNextDefaultRun(schedule, tzReference, graceMs) {
+  if (schedule.paused) {
+    return null;
+  }
+
+  let cursor = tzReference.clone();
+  for (let i = 0; i < 21; i += 1) {
+    const weekday = cursor.isoWeekday();
+    const defaultTime = resolveDailyTime(schedule, weekday);
+
+    if (defaultTime) {
+      const targetMoment = parseTimeToMoment(cursor, defaultTime);
+      if (isUpcoming(targetMoment, tzReference, graceMs)) {
+        return {
+          override: null,
+          targetMoment,
+        };
+      }
+    }
+
+    cursor = cursor.add(1, 'day').startOf('day');
+  }
+
+  return null;
 }
 
 async function getNextRun({
@@ -332,67 +541,31 @@ async function getNextRun({
   includeDetails = false,
   graceMs = 0,
 } = {}) {
-  const schedule = await getSchedule();
-  const tzReference = referenceMoment.clone().tz(schedule.timezone);
+  return withScheduleLock(async () => {
+    const schedule = await getScheduleUnsafe();
+    const tzReference = referenceMoment.clone().tz(schedule.timezone);
 
-  if (schedule.paused) {
-    const override = schedule.manualOverrides.find((item) => {
-      const target = parseAppDateTime(item.date, item.time, schedule.timezone);
-      return isUpcoming(target, tzReference, graceMs) && !item.consumedAt;
-    });
+    const nextManual = findNextManualRun(schedule, tzReference, graceMs);
+    const nextDefault = findNextDefaultRun(schedule, tzReference, graceMs);
 
-    if (!override) {
-      return null;
+    let selected = nextDefault;
+    if (
+      nextManual &&
+      (!selected || nextManual.targetMoment.isBefore(selected.targetMoment))
+    ) {
+      selected = nextManual;
     }
 
-    const dateMoment = parseAppDate(override.date, schedule.timezone);
-    const targetMoment = parseTimeToMoment(dateMoment, override.time);
+    if (!selected || !selected.targetMoment) {
+      return includeDetails ? { schedule, override: null, targetMoment: null } : null;
+    }
 
     return {
       schedule,
-      override,
-      targetMoment,
+      override: selected.override,
+      targetMoment: selected.targetMoment,
     };
-  }
-
-  let cursor = tzReference.clone();
-  for (let i = 0; i < 21; i += 1) {
-    const dateKey = cursor.format(APP_DATE_FORMAT);
-    const override = findActiveOverride(schedule, dateKey);
-
-    if (override) {
-      const targetMoment = parseTimeToMoment(cursor, override.time);
-      if (isUpcoming(targetMoment, tzReference, graceMs)) {
-        return {
-          schedule,
-          override,
-          targetMoment,
-        };
-      }
-      cursor = cursor.add(1, 'day').startOf('day');
-      continue;
-    }
-
-    const weekday = cursor.isoWeekday();
-    const defaultTime = resolveDailyTime(schedule, weekday);
-    if (!defaultTime) {
-      cursor = cursor.add(1, 'day').startOf('day');
-      continue;
-    }
-
-    const targetMoment = parseTimeToMoment(cursor, defaultTime);
-    if (isUpcoming(targetMoment, tzReference, graceMs)) {
-      return {
-        schedule,
-        override: null,
-        targetMoment,
-      };
-    }
-
-    cursor = cursor.add(1, 'day').startOf('day');
-  }
-
-  return includeDetails ? { schedule, override: null, targetMoment: null } : null;
+  });
 }
 
 module.exports = {

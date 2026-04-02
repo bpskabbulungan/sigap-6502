@@ -1,13 +1,14 @@
 import clsx from "clsx";
+import { toneClass } from "../../lib/toneVariants";
 
 const baseStyles =
   "flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed text-center";
 
 const variants = {
-  default: "border-white/10 bg-slate-900/60 text-slate-300",
-  info: "border-sky-400/30 bg-sky-500/5 text-sky-200",
-  warning: "border-amber-400/30 bg-amber-500/5 text-amber-200",
-  danger: "border-rose-400/30 bg-rose-500/5 text-rose-200",
+  default: toneClass("default", "subtleSurface"),
+  info: toneClass("info", "subtleSurface"),
+  warning: toneClass("warning", "subtleSurface"),
+  danger: toneClass("danger", "subtleSurface"),
 };
 
 const sizes = {
@@ -28,17 +29,22 @@ export function DataPlaceholder({
 }) {
   return (
     <div
-      className={clsx(baseStyles, variants[variant], sizes[size], className)}
+      className={clsx(
+        baseStyles,
+        variants[variant] ?? variants.default,
+        sizes[size] ?? sizes.md,
+        className
+      )}
       {...props}
     >
-      {icon ? <div className="text-4xl text-primary-300">{icon}</div> : null}
+      {icon ? <div className="text-4xl text-primary/80">{icon}</div> : null}
 
       <div className="space-y-1">
-        <h3 className="text-lg font-semibold text-white">{title}</h3>
-        {description && <p className="text-sm text-slate-400">{description}</p>}
+        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
       </div>
 
-      {action && <div className="mt-2">{action}</div>}
+      {action ? <div className="mt-2">{action}</div> : null}
     </div>
   );
 }

@@ -1,16 +1,13 @@
-<!DOCTYPE html>
-<html lang="id">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Halaman Tidak Ditemukan</title>
-    <link rel="stylesheet" href="/styles/errors.css" />
-  </head>
-  <body class="error-body">
-    <div class="error-card">
-      <h1>404</h1>
-      <p>Maaf, halaman yang Anda cari tidak ditemukan.</p>
-      <a class="error-link" href="/">Kembali ke beranda</a>
-    </div>
-  </body>
-</html>
+<%- include('error', {
+  title: '404 - Halaman tidak ditemukan',
+  status: 404,
+  statusLabel: 'Not Found',
+  headline: 'Halaman tidak ditemukan',
+  description: 'Halaman yang Anda tuju tidak tersedia.',
+  accent: 'info',
+  icon: '?',
+  actions: [
+    { type: 'link', kind: 'primary', label: 'Ke Beranda', href: '/' },
+    { type: 'back', kind: 'secondary', label: 'Kembali' },
+  ],
+}) %>

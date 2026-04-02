@@ -1,31 +1,26 @@
 import clsx from "clsx";
+import { toneClass } from "../../lib/toneVariants";
 
-const variantToTone = {
-  default: 'neutral',
-  success: 'success',
-  danger: 'danger',
-  warning: 'warning',
-  info: 'info',
-};
-
-export function Badge({ children, variant = "default", outline = false, className, ...props }) {
-  const tone = variantToTone[variant] || 'neutral';
-  const style = outline
-    ? {
-        backgroundColor: 'transparent',
-        color: `var(--tone-${tone}-text)`,
-        borderColor: `var(--tone-${tone}-border)`,
-      }
-    : {
-        backgroundColor: `var(--tone-${tone}-bg)`,
-        color: `var(--tone-${tone}-text)`,
-        borderColor: `var(--tone-${tone}-border)`,
-      };
-
-  const base = "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors border";
-
+export function Badge({
+  children,
+  variant = "default",
+  outline = false,
+  className,
+  ...props
+}) {
   return (
-    <span role="status" style={style} className={clsx(base, className)} {...props}>
+    <span
+      role="status"
+      className={clsx(
+        "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors",
+        outline ? "bg-transparent" : undefined,
+        outline
+          ? toneClass(variant, "badgeOutline")
+          : toneClass(variant, "badgeSolid"),
+        className
+      )}
+      {...props}
+    >
       {children}
     </span>
   );

@@ -6,7 +6,7 @@ const config = require('../config/env');
 
 function createSessionMiddleware() {
   if (!config.sessionSecret) throw new Error('SESSION_SECRET');
-  const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+  const REMEMBER_ME_TTL_MS = 180 * 24 * 60 * 60 * 1000;
   const storageDir = path.join(__dirname, '..', '..', 'storage', 'sessions');
   fs.mkdirSync(storageDir, { recursive: true });
   const FileStore = FileStoreFactory(session);
@@ -21,7 +21,7 @@ function createSessionMiddleware() {
       path: storageDir,
       retries: 1,
       fileExtension: '.json',
-      ttl: Math.floor(NINETY_DAYS_MS / 1000), // TTL untuk session persistence
+      ttl: Math.floor(REMEMBER_ME_TTL_MS / 1000),
       reapInterval: 12 * 60 * 60, // bersih-bersih file usang tiap 12 jam
     }),
     cookie: {
@@ -29,7 +29,7 @@ function createSessionMiddleware() {
       sameSite: 'lax',
       httpOnly: true,
       path: '/',
-      maxAge: NINETY_DAYS_MS, // remember-me: keep session cookies for ~3 months
+      maxAge: null,
     },
   });
 }

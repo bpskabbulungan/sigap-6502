@@ -24,6 +24,7 @@ let client = null;
 let latestQR = null;
 let botActive = false;
 let botPhase = "idle";
+let clientSessionId = 0;
 let isRestarting = false;
 let manualStopInProgress = false;
 let isClientReady = false;
@@ -47,6 +48,24 @@ const WARM_READY_MS = (() => {
 const TRANSIENT_STATES = new Set(["OPENING", "PAIRING", "UNPAIRED_IDLE", "UNLAUNCHED"]);
 const TRANSIENT_GRACE_MS = 90 * 1000;
 const MAX_STATE_WARNINGS_BEFORE_RESTART = 2;
+
+function beginClientSession() {
+  clientSessionId += 1;
+  return clientSessionId;
+}
+
+function invalidateClientSession() {
+  clientSessionId += 1;
+  return clientSessionId;
+}
+
+function isCurrentClientSession(targetClient, expectedSessionId) {
+  return (
+    Boolean(targetClient) &&
+    targetClient === client &&
+    expectedSessionId === clientSessionId
+  );
+}
 
 function armReadyDeadline(label) {
   const ms = firstBoot ? COLD_READY_MS : WARM_READY_MS;
@@ -119,7 +138,13 @@ function resetClientHealth() {
   consecutiveStateWarnings = 0;
 }
 
-function handleReady(source = "ready-event") {
+function handleReady(source = "ready-event", targetClient = client, sessionId = clientSessionId) {
+  if (!isCurrentClientSession(targetClient, sessionId)) {
+    if (BOT_VERBOSE_LOGS) {
+      logAdmin(`[Debug] Abaikan ready dari sesi usang (${source}).`);
+    }
+    return;
+  }
   if (isClientReady) return;
   clearReadyDeadline();
   stopAuthStatePolling();
@@ -127,28 +152,31 @@ function handleReady(source = "ready-event") {
   firstBoot = false;
   latestQR = null;
   logPublic(`[Bot] WhatsApp Client is ready! (${source})`);
+  logPublic("[Sistem] Status bot: aktif.");
   emitQrUpdate(null);
   updateBotStatus({ active: true, phase: "ready" });
   markClientHealthy(source);
   startHeartbeat(logAdmin, logPublic, TIMEZONE, moment);
   startClientStatusChecker();
-  startScheduler(client, addLog);
+  startScheduler(targetClient, addLog);
 }
 
-function startAuthStatePolling() {
+function startAuthStatePolling(targetClient = client, sessionId = clientSessionId) {
   stopAuthStatePolling();
   let pollCount = 0;
   authStateInterval = setInterval(async () => {
-    if (!client || isClientReady) return;
+    if (!isCurrentClientSession(targetClient, sessionId) || isClientReady) return;
     pollCount += 1;
     try {
-      const state = await client.getState();
+      const state = await targetClient.getState();
+      if (!isCurrentClientSession(targetClient, sessionId)) return;
       logAdmin(`[Debug] Auth poll state: ${state || "unknown"} (#${pollCount})`);
       if (state === "CONNECTED") {
         logAdmin("[Sistem] Deteksi CONNECTED saat auth. Menandai bot siap.");
-        handleReady("state-connected");
+        handleReady("state-connected", targetClient, sessionId);
       }
     } catch (err) {
+      if (!isCurrentClientSession(targetClient, sessionId)) return;
       logAdmin(
         `[Debug] Auth poll gagal: ${err.message || String(err)} (#${pollCount})`
       );
@@ -227,10 +255,15 @@ async function startBot() {
     clientOpts.webVersion = WA_WEB_VERSION;
   }
 
-  client = new Client(clientOpts);
+  const currentSessionId = beginClientSession();
+  const currentClient = new Client(clientOpts);
+  client = currentClient;
+  const isStaleSession = () =>
+    !isCurrentClientSession(currentClient, currentSessionId);
 
   // --- Events ---
-  client.on("loading_screen", (percent, message) => {
+  currentClient.on("loading_screen", (percent, message) => {
+    if (isStaleSession()) return;
     bumpReadyDeadline("loading_screen");
     if (!BOT_VERBOSE_LOGS) return;
     const percentText =
@@ -243,7 +276,8 @@ async function startBot() {
     logAdmin(`[Bot] Loading screen: ${percentText}${detail}`);
   });
 
-  client.on("change_state", (state) => {
+  currentClient.on("change_state", (state) => {
+    if (isStaleSession()) return;
     bumpReadyDeadline("change_state");
     if (state === "CONNECTED") {
       markClientHealthy("change_state CONNECTED");
@@ -252,7 +286,8 @@ async function startBot() {
     logAdmin(`[Bot] State berubah: ${state}`);
   });
 
-  client.on("qr", (qr) => {
+  currentClient.on("qr", (qr) => {
+    if (isStaleSession()) return;
     clearReadyDeadline();
     stopAuthStatePolling();
     if (latestQR !== qr) {
@@ -264,20 +299,23 @@ async function startBot() {
     }
   });
 
-  client.on("authenticated", () => {
+  currentClient.on("authenticated", () => {
+    if (isStaleSession()) return;
     latestQR = null;
     logPublic("[Bot] Authenticated");
     updateBotStatus({ active: false, phase: "authenticated" });
     emitQrUpdate(null);
     armReadyDeadline("post-auth");
-    startAuthStatePolling();
+    startAuthStatePolling(currentClient, currentSessionId);
   });
 
-  client.on("ready", async () => {
-    handleReady("ready-event");
+  currentClient.on("ready", async () => {
+    if (isStaleSession()) return;
+    handleReady("ready-event", currentClient, currentSessionId);
   });
 
-  client.on("auth_failure", async (e) => {
+  currentClient.on("auth_failure", async (e) => {
+    if (isStaleSession()) return;
     firstBoot = true;
     clearReadyDeadline();
     stopAuthStatePolling();
@@ -304,7 +342,8 @@ async function startBot() {
     updateBotStatus({ active: false, phase: "error" });
   });
 
-  client.on("disconnected", async (reason) => {
+  currentClient.on("disconnected", async (reason) => {
+    if (isStaleSession()) return;
     clearReadyDeadline();
     stopAuthStatePolling();
     resetClientHealth();
@@ -352,8 +391,10 @@ async function startBot() {
       logAdmin("[Sistem] WA Web mengikuti cache otomatis (tidak dipaksa).");
     }
     try {
-      await client.initialize();
+      await currentClient.initialize();
+      if (isStaleSession()) return;
     } catch (e) {
+      if (isStaleSession()) return;
       try {
         const sessionsBase = path.join(
           __dirname,
@@ -381,10 +422,12 @@ async function startBot() {
       } catch (_) {
         // Abaikan kegagalan pembersihan profile directory.
       }
-      await client.initialize();
+      await currentClient.initialize();
+      if (isStaleSession()) return;
     }
-    logPublic("[Sistem] Bot aktif.");
+    logPublic("[Sistem] Inisialisasi WhatsApp client selesai. Menunggu status siap.");
   } catch (err) {
+    if (isStaleSession()) return;
     clearReadyDeadline();
     stopAuthStatePolling();
     resetClientHealth();
@@ -417,8 +460,9 @@ async function stopBot(logPartsArg, optionsArg) {
   const manualStop = hasManualOption
     ? Boolean(options.manual)
     : arguments.length === 0;
+  const clientToStop = client;
 
-  if (!client) {
+  if (!clientToStop) {
     if (logParts.heartbeat)
       logAdmin("[Sistem] Menghentikan heartbeat...");
     stopHeartbeat();
@@ -432,6 +476,9 @@ async function stopBot(logPartsArg, optionsArg) {
     updateBotStatus({ active: false, phase: nextPhase });
     return;
   }
+
+  // Invalidate session first so late events from old client cannot override status.
+  invalidateClientSession();
 
   try {
     const schedulerLogger = logParts.scheduler ? addLog : () => {};
@@ -449,7 +496,7 @@ async function stopBot(logPartsArg, optionsArg) {
     if (manualStop) manualStopInProgress = true;
 
     try {
-      await client.destroy();
+      await clientToStop.destroy();
     } finally {
       if (manualStop) manualStopInProgress = false;
     }
@@ -503,10 +550,13 @@ function startClientStatusChecker(intervalMs = 60000) {
 
   statusCheckerInterval = setInterval(async () => {
     if (isRestarting) return;
-    if (!client) return;
+    const inspectedClient = client;
+    const inspectedSessionId = clientSessionId;
+    if (!isCurrentClientSession(inspectedClient, inspectedSessionId)) return;
 
     try {
-      const state = await client.getState();
+      const state = await inspectedClient.getState();
+      if (!isCurrentClientSession(inspectedClient, inspectedSessionId)) return;
 
       if (state === "CONNECTED") {
         markClientHealthy("getState CONNECTED");
@@ -551,6 +601,7 @@ function startClientStatusChecker(intervalMs = 60000) {
       resetClientHealth();
       await restartAfterSilentCrash();
     } catch (err) {
+      if (!isCurrentClientSession(inspectedClient, inspectedSessionId)) return;
       logAdmin(`[Sistem] Gagal cek client state: ${err.message}`);
       resetClientHealth();
       await restartAfterSilentCrash();

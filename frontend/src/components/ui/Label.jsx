@@ -3,10 +3,10 @@ import clsx from "clsx";
 const baseStyles = "block font-semibold tracking-wide uppercase";
 
 const variants = {
-  default: "text-slate-300",
-  error: "text-rose-400",
-  success: "text-emerald-400",
-  disabled: "text-slate-500 cursor-not-allowed",
+  default: "text-muted-foreground",
+  error: "text-destructive",
+  success: "text-success",
+  disabled: "cursor-not-allowed text-muted-foreground/70",
 };
 
 const sizes = {
@@ -25,15 +25,20 @@ export function Label({
 }) {
   return (
     <label
-      className={clsx(baseStyles, variants[variant], sizes[size], className)}
+      className={clsx(
+        baseStyles,
+        variants[variant] ?? variants.default,
+        sizes[size] ?? sizes.md,
+        className
+      )}
       {...props}
     >
       {children}
-      {required && (
-        <span className="ml-1 text-rose-400" aria-hidden="true">
+      {required ? (
+        <span className="ml-1 text-destructive" aria-hidden="true">
           *
         </span>
-      )}
+      ) : null}
     </label>
   );
 }

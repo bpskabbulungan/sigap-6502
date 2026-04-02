@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Bot } from "lucide-react";
 import { useBotStart, useBotStatus, useBotStop } from "../queries/bot";
 import { useQr } from "../queries/system";
+import { QueryErrorNotice } from "./error/QueryErrorNotice";
 import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
 import { Spinner } from "./ui/Spinner";
@@ -9,6 +10,15 @@ import { Skeleton } from "./ui/Skeleton";
 import { StatusPill } from "./StatusPill";
 import { useToast } from "./ui/ToastProvider.jsx";
 import { useConfirm } from "./ui/ConfirmProvider.jsx";
+
+function buildQrRevision(value) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+}
 
 export function BotControlPanel() {
   const { data, isLoading, refetch: refetchStatus } = useBotStatus();
@@ -115,6 +125,12 @@ export function BotControlPanel() {
     return "Memantau status WhatsApp...";
   }, [phase, qrLoading]);
 
+  const qrImageUrl = useMemo(() => {
+    if (!qr) return "";
+    const revision = buildQrRevision(qr);
+    return `/api/system/qr.svg?v=${revision}`;
+  }, [qr]);
+
   const showQrInstructions =
     !active && ["waiting-qr", "error", "stopped"].includes(phase);
   const transitionalNotice =
@@ -127,20 +143,19 @@ export function BotControlPanel() {
       : null;
 
   return (
-    <Card className="relative overflow-hidden bg-gradient-to-br from-primary-500/15 via-slate-900/70 to-slate-900/80 shadow-primary-500/20">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.15),_transparent_55%)]" />
-
-      <div className="flex flex-col gap-5 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-500/10 text-primary-400">
+    <Card className="bot-panel-cq relative overflow-hidden border-border/70 bg-[linear-gradient(165deg,hsl(var(--card))_0%,hsl(var(--card))_58%,hsl(var(--info)/0.06)_100%)]">
+      <div className="pointer-events-none absolute -right-16 -top-14 h-32 w-32 rounded-full bg-primary/12 blur-3xl" />
+      <div className="relative flex flex-col gap-4 p-4 sm:gap-5 sm:p-6">
+        <div className="bot-panel-header flex flex-col gap-3">
+          <div className="bot-panel-title-row flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary sm:h-10 sm:w-10">
               <Bot className="h-5 w-5" aria-hidden="true" />
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-white">
+            <div className="bot-panel-title-copy min-w-0">
+              <h3 className="text-base font-semibold text-foreground sm:text-lg">
                 Kontrol Bot WhatsApp
               </h3>
-              <p className="text-sm text-slate-300">
+              <p className="text-xs leading-5 text-muted-foreground sm:text-sm sm:leading-6">
                 Pantau dan kontrol status bot agar pengiriman pesan berjalan
                 sesuai jadwal.
               </p>
@@ -149,13 +164,16 @@ export function BotControlPanel() {
           {isLoading ? (
             <Skeleton className="h-6 w-24" />
           ) : (
-            <StatusPill active={active} phase={phase} />
+            <div className="bot-panel-status self-start">
+              <StatusPill active={active} phase={phase} />
+            </div>
           )}
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="bot-panel-actions grid gap-2 sm:gap-3">
           <Button
             variant="success"
+            className="w-full text-xs !border-emerald-700 !bg-emerald-600 !text-white shadow-sm shadow-emerald-700/20 hover:!bg-emerald-700 disabled:!border-emerald-300 disabled:!bg-emerald-200 disabled:!text-emerald-900 sm:text-sm"
             disabled={disableStart}
             type="button"
             onClick={() =>
@@ -173,7 +191,8 @@ export function BotControlPanel() {
             {starting ? "Mengaktifkan..." : "Start Bot"}
           </Button>
           <Button
-            variant="danger"
+            variant="destructive"
+            className="w-full text-xs !border-red-700 !bg-red-600 !text-white shadow-sm shadow-red-700/20 hover:!bg-red-700 disabled:!border-red-300 disabled:!bg-red-200 disabled:!text-red-900 sm:text-sm"
             disabled={disableStop}
             type="button"
             onClick={handleStop}
@@ -184,50 +203,53 @@ export function BotControlPanel() {
         </div>
 
         {(startMutation.error || stopMutation.error) && (
-          <p className="text-sm text-rose-300">
-            {(startMutation.error || stopMutation.error)?.message}
-          </p>
+          <QueryErrorNotice
+            error={startMutation.error || stopMutation.error}
+            fallbackMessage="Perintah bot belum dapat diproses."
+            onRetry={active ? handleStop : () => startMutation.mutate()}
+            retryLabel={active ? "Coba stop lagi" : "Coba start lagi"}
+            size="sm"
+          />
         )}
 
         {transitionalNotice && (
-          <div className="inline-flex items-center gap-2 self-start rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-200">
-            <Spinner size="xs" className="text-primary-300" />
+          <div className="inline-flex items-center gap-2 self-start rounded-full border border-info/30 bg-info/10 px-3 py-1 text-[11px] text-foreground sm:text-xs">
+            <Spinner size="xs" className="text-primary" />
             <span>{transitionalNotice}</span>
           </div>
         )}
 
         {/* QR helper */}
         {showQrInstructions && (
-          <div className="mt-1 rounded-xl border border-white/10 bg-slate-950/60 p-4">
+          <div className="mt-1 rounded-xl border border-info/25 bg-[linear-gradient(165deg,hsl(var(--info)/0.08),hsl(var(--card)))] p-3 sm:p-4">
             <div className="mb-3">
-              <p className="text-sm font-medium text-white">
-                Perlu scan QR untuk login WhatsApp
+              <p className="text-xs font-medium text-foreground sm:text-sm">
+                Scan QR untuk login WhatsApp
               </p>
-              <p className="text-xs text-slate-400">
+              <p className="text-[11px] text-muted-foreground sm:text-xs">
                 Buka WhatsApp di ponsel {">"} Perangkat tertaut {">"} Tautkan
                 perangkat, lalu arahkan kamera ke QR di bawah.
               </p>
             </div>
 
             {qr ? (
-              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="bot-panel-qr-layout flex flex-col items-start gap-3">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-                    qr
-                  )}`}
+                  src={qrImageUrl}
                   alt="QR WhatsApp"
-                  className="h-auto w-40 rounded border border-white/10 bg-white/5 p-2 sm:w-48"
+                  className="bot-panel-qr-image h-auto w-36 rounded border border-border/70 bg-background/85 p-2"
                 />
-                <div className="flex-1 text-xs text-slate-400 sm:pl-4">
+                <div className="bot-panel-qr-meta flex-1 text-[11px] text-muted-foreground sm:text-xs">
                   <p className="mb-2">
                     QR diperbarui otomatis setiap beberapa detik hingga berhasil
                     login.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
-                      variant="secondary"
+                      variant="info"
                       outline
                       size="sm"
+                      className="text-[11px] sm:text-xs"
                       onClick={() => {
                         navigator.clipboard?.writeText(qr);
                         addToast("QR disalin ke clipboard.", { type: "info" });
@@ -235,7 +257,7 @@ export function BotControlPanel() {
                     >
                       Salin kode mentah
                     </Button>
-                    <span className="self-center text-[11px] text-slate-500">
+                    <span className="self-center text-[11px] text-muted-foreground sm:text-xs">
                       {qrStatusLabel}
                     </span>
                   </div>
@@ -243,8 +265,8 @@ export function BotControlPanel() {
               </div>
             ) : (
               <div
-                className={`flex items-center gap-2 text-xs ${
-                  phase === "error" ? "text-rose-300" : "text-slate-400"
+                className={`flex items-center gap-2 text-[11px] sm:text-xs ${
+                  phase === "error" ? "text-destructive" : "text-muted-foreground"
                 }`}
               >
                 {phase !== "error" ? <Spinner size="sm" /> : null}

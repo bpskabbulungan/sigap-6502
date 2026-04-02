@@ -1,224 +1,289 @@
-# Sistem Informasi Pengingat Presensi (SIGAP)
+﻿# SIGAP 6502 - Sistem Informasi Pengingat Presensi
 
-SIGAP menghadirkan pemantauan bot presensi WhatsApp, pengaturan jadwal otomatis maupun manual, serta pemantauan status koneksi bot dalam satu dashboard terpadu sehingga tim dapat memastikan proses presensi berjalan lancar setiap saat.
+SIGAP 6502 adalah aplikasi monitoring dan administrasi pengingat presensi berbasis WhatsApp untuk tim internal BPS Kabupaten Bulungan. Aplikasi ini menyatukan status bot, jadwal kirim, pengumuman, template pesan, dan data kontak dalam satu panel yang konsisten.
 
-## Catatan Rilis Terbaru
+## Overview
 
-- **2025-09**: Jadwal default sistem otomatis ditingkatkan ke versi WITA terbaru. Jadwal dengan penanda `updatedBy = system` akan diselaraskan ulang agar menggunakan jam 16:00/16:30 ketika versi baru terdeteksi, dan perubahan ini segera dipublikasikan ke dashboard publik maupun admin.
+SIGAP 6502 dibangun sebagai monorepo `backend` + `frontend` untuk kebutuhan operasional pengingat presensi harian.
 
-## Apa yang ada?
+Aplikasi ini ditujukan untuk:
+- Admin operasional yang mengelola jadwal, kontak, dan konten pesan.
+- Tim internal yang membutuhkan visibilitas status layanan secara real-time.
+- Pengguna publik internal yang perlu melihat status layanan tanpa login.
 
-- **Monorepo terstruktur** (`backend/` + `frontend/`).
-- **Konfigurasi jadwal dinamis** per hari dan override manual per tanggal.
-- **Penjadwalan ulang otomatis** ketika jadwal diubah atau override ditambahkan.
-- **Otorisasi berlapis**: halaman publik tanpa login, dashboard admin dengan sesi, API kontrol tetap memakai API key.
-- **Dashboard admin baru (React + Tailwind)** untuk mengatur jadwal, override, log, dan kontrol bot.
-- **Kalender libur lokal** tanpa ketergantungan Google Calendar.
-- **Halaman status publik** yang menampilkan jadwal dan pengiriman berikutnya secara real-time.
-- **Reliabilitas bot ditingkatkan** dengan pemeriksaan koneksi periodik, watcher konfigurasi, dan restart otomatis.
+Nilai utama yang diberikan:
+- Kontrol operasional terpusat dari satu dashboard admin.
+- Monitoring bot dan jadwal yang transparan.
+- Manajemen data pengingat (kontak, kalender, template, kutipan) yang rapi dan terstruktur.
 
-## Arsitektur
+## Fitur Utama
+
+- Dashboard admin operasional dengan ringkasan status bot, jadwal, log, dan pengiriman berikutnya.
+- Login admin berbasis sesi untuk membatasi akses pengelolaan.
+- Manajemen kontak pegawai (tambah, edit, hapus, update status, aksi massal).
+- Manajemen kalender libur dan cuti bersama.
+- Manajemen template pesan dengan placeholder dinamis `{name}` dan `{quote}`.
+- Manajemen kutipan harian untuk kebutuhan isi pesan.
+- Halaman publik status layanan (`/`) untuk melihat status bot, aktivitas, statistik, dan jadwal.
+- Dukungan Light Mode dan Dark Mode pada halaman publik dan admin.
+- Halaman error yang jelas untuk kondisi `404` dan `500`.
+
+## Preview Aplikasi
+
+### Dashboard
+- Light Mode
+
+  ![Dashboard Light](./docs/images/dashboard-light.png)
+
+- Dark Mode
+
+  ![Dashboard Dark](./docs/images/dashboard-dark.png)
+
+### Login
+- Light Mode
+
+  ![Login Light](./docs/images/login-light.png)
+
+- Dark Mode
+
+  ![Login Dark](./docs/images/login-dark.png)
+
+### Kalender
+- Light Mode
+
+  ![Kalender Light](./docs/images/kalender-light.png)
+
+- Dark Mode
+
+  ![Kalender Dark](./docs/images/kalender-dark.png)
+
+### Kontak
+- Light Mode
+
+  ![Kontak Light](./docs/images/kontak-light.png)
+
+- Dark Mode
+
+  ![Kontak Dark](./docs/images/kontak-dark.png)
+
+### Templat
+- Light Mode
+
+  ![Templat Light](./docs/images/templat-light.png)
+
+- Dark Mode
+
+  ![Templat Dark](./docs/images/templat-dark.png)
+
+### Kutipan
+- Light Mode
+
+  ![Kutipan Light](./docs/images/kutipan-light.png)
+
+- Dark Mode
+
+  ![Kutipan Dark](./docs/images/kutipan-dark.png)
+
+### Public Home
+- Light Mode
+
+  ![Public Home Light](./docs/images/public-home-light.png)
+
+- Dark Mode
+
+  ![Public Home Dark](./docs/images/public-home-dark.png)
+
+### Error Pages
+- Error 404
+
+  ![Error 404](./docs/images/error-404.png)
+
+- Error 500
+
+  ![Error 500](./docs/images/error-500.png)
+
+## Dukungan Light Mode dan Dark Mode
+
+Aplikasi mendukung dua mode tampilan (`light` dan `dark`) dengan komponen UI yang konsisten di seluruh halaman publik dan admin. Perpindahan tema tersedia melalui `ThemeToggle` dan preferensi tema disimpan di browser.
+
+| Light Mode | Dark Mode |
+| --- | --- |
+| ![Dashboard Light](./docs/images/dashboard-light.png) | ![Dashboard Dark](./docs/images/dashboard-dark.png) |
+| ![Public Home Light](./docs/images/public-home-light.png) | ![Public Home Dark](./docs/images/public-home-dark.png) |
+
+## Menu Aplikasi
+
+| Menu | Fungsi | Apa yang Bisa Dilakukan User |
+| --- | --- | --- |
+| Dashboard (`/admin/dashboard`) | Pusat monitoring operasional | Memantau status bot, melihat metrik jadwal, membuka log aktivitas, mengecek pengiriman berikutnya, dan menjalankan kontrol bot. |
+| Kontak (`/admin/contacts`) | Manajemen penerima pengingat WhatsApp | Menambah, mengubah, menghapus kontak, mencari data, mengubah status kontak, serta menjalankan aksi massal. |
+| Kalender (`/admin/holidays`) | Manajemen tanggal khusus | Menandai hari libur nasional dan cuti bersama, melihat agenda per bulan, serta menghapus event kalender. |
+| Templat (`/admin/templates`) | Manajemen isi pesan utama | Mengedit template pesan, menyisipkan placeholder `{name}` dan `{quote}`, melihat pratinjau, menyalin hasil, dan menyimpan perubahan. |
+| Kutipan (`/admin/quotes`) | Manajemen daftar kutipan harian | Menambah, mengedit, menghapus kutipan, mencari kutipan, dan memantau batas karakter konten. |
+| Login (`/admin/login`) | Gerbang autentikasi admin | Masuk ke area admin dengan kredensial yang valid dan redirect otomatis ke halaman admin yang dituju. |
+| Public Page (`/`) | Transparansi status layanan | Melihat status bot, ringkasan operasional, log aktivitas publik, statistik 7 hari, dan jadwal pengiriman default. |
+
+## Installation
+
+### 1) Clone repository
 
 ```bash
-wa-reminder/
-+- backend/              # Layanan Express + WhatsApp bot
-¦  +- src/
-¦  ¦  +- app.js         # Inisialisasi Express & middleware
-¦  ¦  +- server.js      # HTTP + Socket.IO bootstrap
-¦  ¦  +- controllers/   # Logika bot, pesan, jadwal
-¦  ¦  +- views/         # Halaman fallback server-side (EJS)
-¦  +- public/           # Aset statis backend (legacy dashboard)
-¦  +- storage/          # `schedule-config.json`, sesi WhatsApp
-¦  +- logs/             # Log ter-rotate
-¦
-+- frontend/            # Aplikasi Vite + React (UI baru)
-¦  +- src/
-¦  ¦  +- pages/         # PublicStatus, AdminLogin, AdminDashboard
-¦  ¦  +- queries/       # React Query hooks (auth, schedule, bot)
-¦  ¦  +- components/    # UI kit & komponen utilitas
-¦  ¦  +- lib/           # API client
-¦  +- public/           # Aset build Vite
-¦
-+- package.json         # Workspaces + shared scripts
-+- README.md
+git clone https://github.com/bpskabbulungan/sigap-6502.git
+cd sigap-6502
 ```
 
-### Manajemen Kontak
-- **Manajemen kontak pegawai**: Data kontak WhatsApp tersimpan permanen di `backend/storage/contacts.json` (dibuat otomatis dan diabaikan Git) dan dapat diubah melalui API/halaman admin.
-- **Manajemen kontak** (`/admin/contacts`): tambah, ubah, hapus kontak pegawai, serta ubah status kehadiran mereka.
-
-
-## Persyaratan
-
-- Node.js 18 atau lebih baru.
-- WhatsApp Web kompatibel (untuk `whatsapp-web.js`).
-- (Opsional) Kredensial Google Sheet bila mengaktifkan integrasi tersebut.
-
-## Instalasi
+### 2) Install dependencies
 
 ```bash
-# Clone repo
-git clone https://github.com/pradanain/wa-reminder.git
-cd wa-reminder
-
-# Instal semua dependensi (backend + frontend)
 npm install
 ```
 
-### Konfigurasi backend (`backend/.env.local`)
+### 3) Setup environment
 
-Salin contoh konfigurasi dan isi ulang setiap rahasia dengan nilai baru yang aman:
+Buat file environment backend dari contoh:
 
 ```bash
-cp backend/.env.example backend/.env.local
-# kemudian edit backend/.env.local
+cp backend/.env.example backend/.env
 ```
 
-File contoh (`backend/.env.example`) memuat placeholder untuk semua variabel yang dibutuhkan, termasuk:
+Nilai minimum yang wajib dipastikan di `backend/.env`:
 
 ```env
 PORT=3301
-WEB_APP_URL=http://localhost:3302
+WEB_APP_URL=http://localhost:5174
 TIMEZONE=Asia/Makassar
 
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=change_me            # untuk pengembangan lokal
-# ADMIN_PASSWORD_HASH=               # hash bcrypt untuk produksi
-SESSION_SECRET=please-change-this-secret
-
-CONTROL_API_KEY=replace_with_api_key
-
-SPREADSHEET_ID=isi_jika_menggunakan_google_sheet
-SPREADSHEET_RANGE=Sheet1!A2:C
-
-SCHEDULER_RETRY_INTERVAL_MS=60000
-SCHEDULER_MAX_RETRIES=3
+ADMIN_PASSWORD=change_me
+SESSION_SECRET=ganti_dengan_secret_aman
+CONTROL_API_KEY=ganti_dengan_api_key_aman
 ```
 
-> Penting: seluruh rahasia yang sempat tersimpan di repository sudah dicabut. Pastikan mengisi ulang `backend/.env.local` dengan nilai baru sebelum menjalankan aplikasi.
-
-> Catatan: file kredensial sensitif di `backend/config/*.json` diabaikan oleh git. Simpan file asli pada direktori tersebut sebelum menjalankan aplikasi.
-
-### Data kontak backend
-
-- File runtime kontak berada di `backend/storage/contacts.json`. File ini **tidak** dikomit ke repository dan akan dibuat otomatis sebagai array kosong ketika backend pertama kali dijalankan.
-- Untuk bootstrap data, salin contoh dari `backend/storage/contacts.example.json` kemudian sesuaikan, atau tambahkan kontak melalui halaman/admin API `POST /api/admin/contacts`.
-- Setiap perubahan lewat UI/admin API akan langsung memperbarui file `contacts.json`. Pastikan direktori `backend/storage/` dapat ditulis oleh proses backend (atau dipetakan ke volume ketika menggunakan Docker).
-
-### Konfigurasi frontend (`frontend/.env`)
+Buat file `frontend/.env` secara manual:
 
 ```env
 VITE_API_BASE_URL=http://localhost:3301
 ```
 
-### Variabel lingkungan runtime frontend (Docker)
-
-Ketika menjalankan image frontend hasil build, konfigurasi proxy Nginx kini
-dihasilkan dari templat menggunakan `envsubst`. Gunakan variabel lingkungan
-berikut untuk mengarahkan container frontend ke host backend yang sesuai tanpa
-perlu rebuild image:
-
-| Variabel        | Default  | Deskripsi                              |
-| --------------- | -------- | -------------------------------------- |
-| `BACKEND_HOST`  | `backend` | Hostname atau IP backend yang diproksi |
-| `BACKEND_PORT`  | `3301`   | Port HTTP backend                      |
-
-Contoh override manual:
-
-```bash
-docker run -e BACKEND_HOST=backend.internal -e BACKEND_PORT=8080 \
-  -p 80:80 ghcr.io/organisasi/wa-reminder-frontend:latest
-```
-
-`docker-compose.yml` juga menyediakan variabel `FRONTEND_BACKEND_HOST` dan
-`FRONTEND_BACKEND_PORT` agar mudah dioverride lewat environment host.
-
-## Menjalankan
-
-### Mode pengembangan (backend + frontend bersamaan)
+### 4) Run development mode
 
 ```bash
 npm run dev
 ```
 
-- Backend tersedia di `http://localhost:3301`
-- Frontend React tersedia di `http://localhost:5173`
+Akses aplikasi:
+- Backend API: `http://localhost:3301`
+- Frontend: `http://localhost:5174`
 
-### Menjalankan hanya backend
-
-```bash
-npm run dev:backend   # nodemon src/server.js
-```
-
-### Menjalankan hanya frontend
+### 5) Build production assets
 
 ```bash
-npm run dev:frontend  # vite dev server
+npm run build
 ```
 
-### Build produksi
+### 6) Start aplikasi (mode production-like)
+
+Jalankan backend dan frontend preview pada terminal terpisah:
 
 ```bash
-npm run build         # backend: no-op, frontend: vite build
+npm --workspace backend run start
 ```
 
-Hasil build frontend berada di `frontend/dist/`. Sajikan folder ini melalui CDN atau reverse proxy lalu arahkan `WEB_APP_URL` ke domain produksimu.
+```bash
+npm --workspace frontend run preview -- --host 0.0.0.0 --port 4173
+```
 
-## Fitur Backend
+Akses hasil start:
+- Backend: `http://localhost:3301`
+- Frontend preview: `http://localhost:4173`
 
-- **Penjadwalan dinamis**: `scheduleService` menyimpan jadwal ke `backend/storage/schedule-config.json`. File dibuat otomatis saat pertama kali dijalankan.
-- **Override manual**: Override berlaku sekali dan otomatis ditandai setelah pengiriman, lalu dibersihkan.
-- **Watcher file**: Perubahan manual pada `schedule-config.json` memicu reschedule otomatis.
-- **Auto retry**: Jika WhatsApp client putus, sistem mencoba ulang sampai `SCHEDULER_MAX_RETRIES` dengan interval `SCHEDULER_RETRY_INTERVAL_MS`.
-- **API baru**:
-  - `GET /api/schedule` & `GET /api/schedule/next-run` (publik)
-  - `POST /api/auth/login` & `POST /api/auth/logout`
-  - `GET/PUT /api/admin/schedule`
-  - `POST/DELETE /api/admin/schedule/overrides`
-  - `POST /api/admin/bot/start` dan `POST /api/admin/bot/stop`
-  - Endpoint lama `/api/system/*`, `/api/bot/*` tetap tersedia (dengan API key bila diperlukan).
+## Scripts
 
-### Pemindaian QR WhatsApp
+### Root workspace (`package.json`)
 
-Saat pertama kali menjalankan bot, Anda perlu memindai QR WhatsApp.
+| Script | Keterangan |
+| --- | --- |
+| `npm run dev` | Menjalankan backend dan frontend bersamaan. |
+| `npm run dev:backend` | Menjalankan backend saja (nodemon). |
+| `npm run dev:frontend` | Menjalankan frontend saja (Vite dev server). |
+| `npm run build` | Build backend + frontend workspace. |
+| `npm run test` | Menjalankan test backend + frontend. |
+| `npm run lint` | Menjalankan lint backend + frontend. |
+| `npm run check:lf` | Validasi line ending script shell. |
+| `npm run postinstall` | Menjalankan `patch-package` setelah instalasi. |
 
-- Lihat QR di terminal: backend sudah mencetak QR ASCII jika berjalan di terminal yang ter-attach.
-- Lihat QR di browser:
-  - JSON: `GET /api/system/qr` mengembalikan string QR (atau `null`).
-  - Gambar: `GET /api/system/qr.svg` menampilkan QR sebagai SVG (mudah di-embed).
-  - Halaman siap pakai: buka `http://localhost:3301/qr.html` untuk menampilkan QR dengan refresh otomatis setiap 15 detik.
-- Opsi headful (pop-up Chrome): set `PUPPETEER_HEADLESS=false` di environment backend agar jendela Chrome terbuka dan menampilkan QR langsung.
-- Persistensi sesi: sesi WhatsApp disimpan di `backend/storage/sessions/` (gunakan volume/mount di Docker agar tidak perlu scan ulang).
+### Backend (`backend/package.json`)
 
-## Fitur Frontend
+| Script | Keterangan |
+| --- | --- |
+| `npm --workspace backend run start` | Menjalankan backend production mode (`node src/server.js`). |
+| `npm --workspace backend run dev` | Menjalankan backend development mode (`nodemon`). |
+| `npm --workspace backend run build` | Placeholder build backend. |
+| `npm --workspace backend run lint` | Lint source backend. |
+| `npm --workspace backend run test` | Test backend. |
 
-- **Halaman publik** (`/`) menampilkan status bot, jadwal harian, dan pengiriman berikutnya.
-- **Login admin** (`/admin/login`) dengan sesi cookie.
-- **Dashboard admin** (`/admin/dashboard`):
-  - Edit jadwal harian (time picker per hari).
-  - Mengatur zona waktu dan pause scheduler.
-  - Mengelola override manual (tambah/hapus).
-  - Kontrol bot (start/stop) + indikator status.
-  - Viewer log real-time (auto refresh).
-- Dibangun dengan React + React Router + React Query + Tailwind v4.
+### Frontend (`frontend/package.json`)
 
-## Catatan Operasional
+| Script | Keterangan |
+| --- | --- |
+| `npm --workspace frontend run dev` | Menjalankan frontend development mode. |
+| `npm --workspace frontend run build` | Build frontend production bundle. |
+| `npm --workspace frontend run preview` | Menjalankan preview build frontend. |
+| `npm --workspace frontend run lint` | Lint source frontend. |
+| `npm --workspace frontend run test` | Test frontend. |
+| `npm --workspace frontend run test:visual` | Menjalankan visual test Playwright. |
+| `npm --workspace frontend run test:visual:update` | Update snapshot visual test. |
 
-- `backend/storage/schedule-config.json` dan `backend/storage/sessions/` diabaikan dari git namun disimpan lokal untuk menjalankan bot.
-- Pastikan direktori `backend/logs/` writable, log akan dirotasi harian oleh Winston.
-- Untuk produksi, gunakan reverse proxy (nginx/traefik) untuk mengamankan backend dan sajikan frontend hasil build.
-- Backup file `schedule-config.json` bila ingin menjaga riwayat konfigurasi jadwal.
+## Struktur Project
 
-## Script bantu (root)
+```bash
+sigap-6502/
+|- backend/
+|- frontend/
+|  |- src/
+|  |  |- pages/        # app/
+|  |  |- components/   # components/
+|  |  |- lib/          # lib/
+|  |  |- queries/      # hooks data fetching
+|  |  |- utils/        # hooks/helper utilitas
+|  |- public/          # public/
+|- docs/
+|  |- images/          # screenshot dokumentasi GitHub
+|- scripts/
+|- README.md
+```
 
-| Perintah               | Deskripsi                                       |
-| ---------------------- | ----------------------------------------------- |
-| `npm run dev`          | Jalankan backend + frontend bersamaan           |
-| `npm run dev:backend`  | Jalankan backend saja (nodemon)                 |
-| `npm run dev:frontend` | Jalankan frontend (Vite)                        |
-| `npm run build`        | Build frontend (backend tidak memerlukan build) |
-| `npm run lint`         | Lint backend (`eslint --ext .js src`)           |
+Padanan struktur inti yang dipakai di dokumentasi ini:
+- `app/` -> `frontend/src/pages/`
+- `components/` -> `frontend/src/components/`
+- `lib/` -> `frontend/src/lib/`
+- `hooks/` -> `frontend/src/queries/` dan `frontend/src/utils/`
+- `public/` -> `frontend/public/`
+- `docs/images/` -> aset screenshot untuk README
 
----
+## Daftar Screenshot yang Dibutuhkan
 
-Selamat menikmati arsitektur baru! Jika menemukan kendala atau ingin menambahkan fitur, lanjutkan dengan membuat branch baru dan pull request sesuai kebutuhan.
+Simpan semua file berikut di `docs/images/`:
+
+- `dashboard-light.png`
+- `dashboard-dark.png`
+- `login-light.png`
+- `login-dark.png`
+- `kalender-light.png`
+- `kalender-dark.png`
+- `kontak-light.png`
+- `kontak-dark.png`
+- `templat-light.png`
+- `templat-dark.png`
+- `kutipan-light.png`
+- `kutipan-dark.png`
+- `public-home-light.png`
+- `public-home-dark.png`
+- `error-404.png`
+- `error-500.png`
+
+## Catatan Pengisian Manual
+
+- Screenshot README sudah tersedia di `docs/images/` sesuai daftar file.
+- Jika URL repository berbeda, perbarui perintah `git clone` pada bagian Installation.
+- Untuk deployment nyata, ganti semua nilai kredensial default (`ADMIN_PASSWORD`, `SESSION_SECRET`, `CONTROL_API_KEY`) dengan nilai aman.

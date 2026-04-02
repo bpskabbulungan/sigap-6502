@@ -89,7 +89,7 @@ async function planNextRun({ referenceMoment, reason = 'auto' } = {}) {
       dayNote = 'tanggal berikutnya dari hari ini';
     }
     const sourceNote = nextRun.override
-      ? `Sumber manual override (${nextRun.override.date} ${nextRun.override.time})`
+      ? `Sumber pengumuman terjadwal (${nextRun.override.date} ${nextRun.override.time})`
       : 'Sumber jadwal rutin';
     logger(
       `[Sistem] Pengiriman akan dilakukan pada ${targetLocal.format(
@@ -264,10 +264,12 @@ async function executeRun(nextRun) {
       return;
     }
 
-    await sendMessagesToAll(client, logger);
+    await sendMessagesToAll(client, logger, {
+      manualEvent: runData.override || null,
+    });
 
     if (runData.override) {
-      await consumeManualOverride(runData.override.date);
+      await consumeManualOverride(runData.override.id || runData.override.date);
     }
 
     await planNextRun({

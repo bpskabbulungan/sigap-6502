@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 const DEFAULT_SUFFIX = "SIGAP 6502";
-const DEFAULT_SEPARATOR = " – ";
+const DEFAULT_SEPARATOR = " | ";
 
 export function useDocumentTitle(title, options = {}) {
   const {
@@ -14,9 +14,8 @@ export function useDocumentTitle(title, options = {}) {
     if (typeof document === "undefined") return undefined;
 
     const previousTitle = document.title;
-
     const normalizedTitle =
-      typeof title === "string" ? title.trim() : title ?? "";
+      typeof title === "string" ? title.trim() : "";
 
     const finalTitle = normalizedTitle
       ? `${normalizedTitle}${suffix ? `${separator}${suffix}` : ""}`

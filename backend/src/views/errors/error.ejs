@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
@@ -6,11 +6,55 @@
     <title><%= title %></title>
     <link rel="stylesheet" href="/styles/errors.css" />
   </head>
-  <body class="error-body">
-    <div class="error-card">
-      <h1><%= status %></h1>
-      <p><%= message %></p>
-      <a class="error-link" href="/">Kembali ke beranda</a>
-    </div>
+  <body class="error-body tone-<%= accent || 'default' %>">
+    <main class="error-shell" role="main">
+      <section class="error-card" aria-live="polite">
+        <header class="error-header">
+          <span class="error-badge"><%= status %> · <%= statusLabel %></span>
+        </header>
+
+        <h1 class="error-title"><%= headline %></h1>
+        <p class="error-description"><%= description %></p>
+
+        <% if (Array.isArray(actions) && actions.length) { %>
+          <div class="error-actions">
+            <% actions.slice(0, 2).forEach(function(action) { %>
+              <% const actionType = action?.type || 'link'; %>
+              <% const actionClass = `error-btn error-btn-${action?.kind || 'secondary'}`; %>
+
+              <% if (actionType === 'link' && action?.href) { %>
+                <a class="<%= actionClass %>" href="<%= action.href %>"><%= action.label %></a>
+              <% } else { %>
+                <button type="button" class="<%= actionClass %>" data-action="<%= actionType %>">
+                  <%= action.label %>
+                </button>
+              <% } %>
+            <% }) %>
+          </div>
+        <% } %>
+      </section>
+    </main>
+
+    <script>
+      document.addEventListener('click', function (event) {
+        const button = event.target.closest('[data-action]');
+        if (!button) return;
+
+        const action = button.getAttribute('data-action');
+        if (action === 'reload') {
+          window.location.reload();
+          return;
+        }
+
+        if (action === 'back') {
+          if (window.history.length > 1) {
+            window.history.back();
+            return;
+          }
+
+          window.location.assign('/');
+        }
+      });
+    </script>
   </body>
 </html>

@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Skeleton } from "./Skeleton"; // ⬅️ sesuaikan path kalau beda
+import { Skeleton } from "./Skeleton";
 
 function toneToKey(tone) {
   if (tone === "emerald") return "success";
@@ -9,44 +9,29 @@ function toneToKey(tone) {
   return "neutral";
 }
 
-/**
- * @param {Object} props
- * @param {string} props.label
- * @param {React.ReactNode} props.value
- * @param {string=} props.helper
- * @param {"slate" | "emerald" | "amber" | "sky" | "rose"} [props.tone]
- * @param {boolean=} props.loading
- * @param {"onDark" | "onLight"} [props.loadingTone]
- */
 export function MetricCard({
   label,
   value,
   helper,
   tone = "slate",
   loading = false,
-  loadingTone = "onDark", // ⬅️ default aman untuk Ringkasan Harian (card gelap)
+  loadingTone = "onDark",
 }) {
   const key = toneToKey(tone);
 
   if (loading) {
     const toneProp = loadingTone === "onLight" ? "onLight" : "onDark";
     return (
-      <div
-        className={clsx(
-          "rounded-2xl border px-5 py-4 shadow-lg backdrop-blur-sm",
-          // sedikit kontras agar skeleton tidak “menyatu” di light mode
-          "border-white/10 bg-slate-950/60"
-        )}
-      >
+      <div className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm sm:px-5 sm:py-4">
         <Skeleton
           tone={toneProp}
           effect="shimmer"
-          className="h-3 w-24 mb-3 rounded-full"
+          className="mb-3 h-3 w-24 rounded-full"
         />
         <Skeleton
           tone={toneProp}
           effect="shimmer"
-          className="h-6 w-28 mb-2 rounded-full"
+          className="mb-2 h-6 w-28 rounded-full"
         />
         <Skeleton
           tone={toneProp}
@@ -67,19 +52,18 @@ export function MetricCard({
     <div
       style={style}
       className={clsx(
-        "rounded-2xl border px-5 py-4 shadow-lg backdrop-blur-sm transition",
-        "hover:-translate-y-0.5 hover:shadow-xl"
+        "min-w-0 rounded-2xl border px-4 py-3 shadow-sm transition-[transform,box-shadow,background-color] sm:px-5 sm:py-4",
+        "bg-[linear-gradient(170deg,transparent,hsl(var(--background)/0.22))] hover:-translate-y-0.5 hover:shadow-md"
       )}
     >
-      <p
-        className="text-xs font-semibold uppercase tracking-wide"
-        style={{ color: "var(--tone-neutral-text, currentColor)" }}
-      >
+      <p className="metric-card-label text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+      <p className="metric-card-value mt-1.5 text-xl font-semibold leading-tight [overflow-wrap:anywhere] sm:mt-2 sm:text-2xl">
+        {value}
+      </p>
       {helper ? (
-        <p className="mt-2 text-xs" style={{ color: "var(--text-2)" }}>
+        <p className="metric-card-helper mt-1.5 text-[11px] leading-5 text-muted-foreground [overflow-wrap:anywhere] sm:mt-2 sm:text-xs">
           {helper}
         </p>
       ) : null}

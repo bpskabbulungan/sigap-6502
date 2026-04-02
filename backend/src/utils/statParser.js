@@ -13,13 +13,31 @@ const {
 
 const LEGACY_LOG_TIMESTAMP_FORMAT = 'DD/MM HH:mm:ss';
 const LOG_LINE_REGEX = /^\[(.+?)\]\s+([A-Z]+)\s*-\s*(.*)$/;
+const MESSAGE_SENT_REGEX = /\bPesan berhasil dikirim\b/i;
+const ERROR_HINT_REGEX =
+  /\b(gagal|error|exception|timeout|disconnect|terputus|failed?)\b/i;
+const BOT_ACTIVE_PATTERNS = [
+  /\bwhatsapp client is ready\b/i,
+  /\bstatus bot\s*:\s*aktif\b/i,
+  /\bbot aktif\b/i,
+];
+const BOT_INACTIVE_PATTERNS = [
+  /\bbot dinonaktifkan\b/i,
+  /\bbot dihentikan\b/i,
+  /\bstatus bot\s*:\s*(nonaktif|stopped?)\b/i,
+];
 
 function getFileDateContext(logFilePath) {
   const fileName = path.basename(logFilePath);
   const appMatch = fileName.match(/(\d{2})-(\d{2})-(\d{4})/);
   if (appMatch) {
     const [, day, month, year] = appMatch;
-    return moment.tz(`${day}-${month}-${year}`, APP_DATE_FORMAT, true, config.timezone);
+    return moment.tz(
+      `${day}-${month}-${year}`,
+      APP_DATE_FORMAT,
+      true,
+      config.timezone
+    );
   }
 
   const legacyMatch = fileName.match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -28,7 +46,12 @@ function getFileDateContext(logFilePath) {
   }
 
   const [, year, month, day] = legacyMatch;
-  return moment.tz(`${year}-${month}-${day}`, LEGACY_ISO_DATE_FORMAT, true, config.timezone);
+  return moment.tz(
+    `${year}-${month}-${day}`,
+    LEGACY_ISO_DATE_FORMAT,
+    true,
+    config.timezone
+  );
 }
 
 function normalizeYear(parsedMoment, contextMoment) {
@@ -42,11 +65,11 @@ function normalizeYear(parsedMoment, contextMoment) {
   const parsedMonth = updated.month();
 
   if (contextMonth === 11 && parsedMonth === 0) {
-    return updated.add(1, "year");
+    return updated.add(1, 'year');
   }
 
   if (contextMonth === 0 && parsedMonth === 11) {
-    return updated.subtract(1, "year");
+    return updated.subtract(1, 'year');
   }
 
   return updated;
@@ -97,8 +120,56 @@ function parseLogLine(line, contextMoment) {
 }
 
 function getDateKey(date) {
-  const normalized = normalizeAppDate(moment.tz(date, config.timezone).format(APP_DATE_FORMAT));
+  const normalized = normalizeAppDate(
+    moment.tz(date, config.timezone).format(APP_DATE_FORMAT)
+  );
   return normalized || moment.tz(date, config.timezone).format(APP_DATE_FORMAT);
+}
+
+function matchesAny(text, patterns) {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function isMessageDelivered(message) {
+  return MESSAGE_SENT_REGEX.test(message);
+}
+
+function isErrorLog(level, message) {
+  if (level === 'error') {
+    return true;
+  }
+
+  if (level === 'warn' && ERROR_HINT_REGEX.test(message)) {
+    return true;
+  }
+
+  return false;
+}
+
+function isBotActivatedLog(message) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes('belum aktif')) {
+    return false;
+  }
+  return matchesAny(message, BOT_ACTIVE_PATTERNS);
+}
+
+function isBotDeactivatedLog(message) {
+  return matchesAny(message, BOT_INACTIVE_PATTERNS);
+}
+
+function addUptimeDuration(uptimePerDay, startDate, endDate) {
+  if (!startDate || !endDate) {
+    return;
+  }
+
+  const durationHours = (endDate - startDate) / (1000 * 60 * 60);
+  if (!Number.isFinite(durationHours) || durationHours <= 0) {
+    return;
+  }
+
+  const key = getDateKey(startDate);
+  uptimePerDay[key] = (uptimePerDay[key] || 0) + durationHours;
 }
 
 async function parseLogFilePerDay(logFilePath) {
@@ -111,6 +182,7 @@ async function parseLogFilePerDay(logFilePath) {
   const uptimePerDay = {};
 
   let currentUptimeStart = null;
+  let lastParsedDate = null;
 
   for await (const line of rl) {
     const parsed = parseLogLine(line, contextMoment);
@@ -121,25 +193,28 @@ async function parseLogFilePerDay(logFilePath) {
 
     const { date, level, message } = parsed;
     const dayKey = getDateKey(date);
+    lastParsedDate = date;
 
-    if (message.includes("Pesan berhasil dikirim")) {
+    if (isMessageDelivered(message)) {
       messagesPerDay[dayKey] = (messagesPerDay[dayKey] || 0) + 1;
     }
 
-    if (message.includes("❌") || level === "error") {
+    if (isErrorLog(level, message)) {
       errorsPerDay[dayKey] = (errorsPerDay[dayKey] || 0) + 1;
     }
 
-    if (message.includes("[Sistem] ✅ Bot aktif.")) {
+    if (isBotActivatedLog(message)) {
       currentUptimeStart = date;
     }
 
-    if (message.includes("[Sistem] 🤖 Bot dinonaktifkan.") && currentUptimeStart) {
-      const duration = (date - currentUptimeStart) / (1000 * 60 * 60);
-      const key = getDateKey(currentUptimeStart);
-      uptimePerDay[key] = (uptimePerDay[key] || 0) + duration;
+    if (isBotDeactivatedLog(message) && currentUptimeStart) {
+      addUptimeDuration(uptimePerDay, currentUptimeStart, date);
       currentUptimeStart = null;
     }
+  }
+
+  if (currentUptimeStart && lastParsedDate) {
+    addUptimeDuration(uptimePerDay, currentUptimeStart, lastParsedDate);
   }
 
   return { messagesPerDay, errorsPerDay, uptimePerDay };

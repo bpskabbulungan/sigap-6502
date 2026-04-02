@@ -1,47 +1,19 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession, useLogout } from "../queries/auth";
-import {
-  useAdminNextRun,
-  useAdminSchedule,
-  useUpdateSchedule,
-} from "../queries/schedule";
+import { useAdminNextRun, useAdminSchedule } from "../queries/schedule";
 import { BotControlPanel } from "../components/BotControlPanel";
 import { LogsPanel } from "../components/LogsPanel";
-import { NextRunCard as NextRunCard } from "../components/NextRunCard.jsx";
+import { NextRunCard } from "../components/NextRunCard.jsx";
 import { ScheduleGrid } from "../components/ScheduleGrid";
-import { Badge } from "../components/ui/Badge";
-import { Button } from "../components/ui/Button";
+import { QueryErrorNotice } from "../components/error/QueryErrorNotice";
 import { Card } from "../components/ui/Card";
-import { Input } from "../components/ui/Input";
-import { Label } from "../components/ui/Label";
 import { Spinner } from "../components/ui/Spinner";
+import { ToneSurface } from "../components/ui/ToneSurface";
 import { AdminLayout } from "../components/layout/AdminLayout";
-import { useToast } from "../components/ui/ToastProvider.jsx";
-import { useConfirm } from "../components/ui/ConfirmProvider.jsx";
 import { MetricCard } from "../components/ui/MetricCard";
-import { Save, RotateCcw, Info } from "lucide-react";
+import { ScrollText, CalendarDays, CalendarClock } from "lucide-react";
 import { useDocumentTitle } from "../utils/useDocumentTitle.js";
-
-const DEFAULT_TIMES = {
-  1: "16:00",
-  2: "16:00",
-  3: "16:00",
-  4: "16:00",
-  5: "16:30",
-  6: "",
-  7: "",
-};
-
-const DAY_NAMES = {
-  1: "Senin",
-  2: "Selasa",
-  3: "Rabu",
-  4: "Kamis",
-  5: "Jumat",
-  6: "Sabtu",
-  7: "Minggu",
-};
 
 const TZ_LABEL = {
   "Asia/Jakarta": "WIB",
@@ -49,192 +21,148 @@ const TZ_LABEL = {
   "Asia/Jayapura": "WIT",
 };
 
-function isValidTimeHHMM(v) {
-  if (!v) return true; // kosong = nonaktif → valid
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
-}
+const PANEL_TABS = [
+  {
+    id: "logs",
+    label: "Log Aktivitas",
+    hint: "Pantau event realtime",
+    icon: ScrollText,
+  },
+  {
+    id: "schedule",
+    label: "Jadwal Otomatis",
+    hint: "Lihat jadwal kirim",
+    icon: CalendarDays,
+  },
+  {
+    id: "next",
+    label: "Pengiriman Berikutnya",
+    hint: "Validasi eksekusi",
+    icon: CalendarClock,
+  },
+];
 
-function isValidIanaTZ(tz) {
-  try {
-    new Intl.DateTimeFormat("id-ID", { timeZone: tz }).format(new Date());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function nowInTZ(tz) {
-  try {
-    const s = new Intl.DateTimeFormat("id-ID", {
-      timeZone: tz,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    }).format(new Date());
-    return s;
-  } catch {
-    return "";
-  }
+function formatUpdatedAt(timestamp) {
+  if (!timestamp) return "-";
+  return new Date(timestamp).toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const { data: session, isLoading: sessionLoading } = useSession();
   const logoutMutation = useLogout();
-  const { add: addToast } = useToast();
-  const { confirm } = useConfirm();
 
-  useDocumentTitle("Dashboard Admin");
+  useDocumentTitle("Dashboard");
 
   const {
     data: scheduleResponse,
     isLoading: scheduleLoading,
     isFetching: scheduleFetching,
+    isError: scheduleError,
+    error: scheduleErrorState,
+    dataUpdatedAt: scheduleUpdatedAt,
+    refetch: refetchSchedule,
   } = useAdminSchedule();
-  const { data: nextRun, isLoading: nextRunLoading } = useAdminNextRun();
 
-  const updateScheduleMutation = useUpdateSchedule();
+  const {
+    data: nextRun,
+    isLoading: nextRunLoading,
+    isError: nextRunError,
+    error: nextRunErrorState,
+    refetch: refetchNextRun,
+  } = useAdminNextRun();
 
   const schedule = scheduleResponse?.schedule;
-
   const isSchedulePending = scheduleLoading && !schedule;
   const isScheduleUpdating = scheduleFetching && !scheduleLoading;
 
-  const [dailyTimes, setDailyTimes] = useState(DEFAULT_TIMES);
-  const [timezone, setTimezone] = useState("Asia/Makassar");
-  const [paused, setPaused] = useState(false);
+  const [panelTab, setPanelTab] = useState("logs");
 
-  const [panelTab, setPanelTab] = useState("logs"); // logs | schedule | next
-  const tablistRef = useRef(null);
+  const handleTabsNavigation = useCallback(
+    (event) => {
+      if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
 
-  // hydrate dari server
-  useEffect(() => {
-    if (schedule) {
-      setDailyTimes({ ...DEFAULT_TIMES, ...(schedule.dailyTimes ?? {}) });
-      setTimezone(schedule.timezone || "Asia/Makassar");
-      setPaused(Boolean(schedule.paused));
-    }
-  }, [schedule]);
+      const currentIndex = PANEL_TABS.findIndex((tab) => tab.id === panelTab);
+      let nextIndex = currentIndex;
 
-  // auth gate
-  useEffect(() => {
-    if (!sessionLoading && !session?.authenticated) {
-      navigate("/admin/login", { replace: true });
-    }
-  }, [session, sessionLoading, navigate]);
-
-  // hotkey: Ctrl/Cmd+S pada tab Jadwal
-  useEffect(() => {
-    const onKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-        if (panelTab === "schedule") {
-          e.preventDefault();
-          handleScheduleSubmit();
-        }
+      if (event.key === "ArrowRight") {
+        nextIndex = (currentIndex + 1) % PANEL_TABS.length;
+      } else if (event.key === "ArrowLeft") {
+        nextIndex = (currentIndex - 1 + PANEL_TABS.length) % PANEL_TABS.length;
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = PANEL_TABS.length - 1;
       }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    panelTab,
-    dailyTimes,
-    timezone,
-    paused,
-    updateScheduleMutation.isLoading,
-  ]);
 
-  const handleScheduleSubmit = (event) => {
-    event?.preventDefault?.();
+      const nextTab = PANEL_TABS[nextIndex];
+      setPanelTab(nextTab.id);
+      requestAnimationFrame(() => {
+        document.getElementById(`tab-${nextTab.id}`)?.focus();
+      });
+    },
+    [panelTab]
+  );
 
-    const normalized = Object.fromEntries(
-      Object.entries(dailyTimes).map(([day, value]) => [day, value || null])
-    );
-    updateScheduleMutation.mutate(
-      { dailyTimes: normalized, timezone, paused },
-      {
-        onSuccess: () =>
-          addToast("Jadwal berhasil disimpan.", { type: "success" }),
-        onError: (err) =>
-          addToast(err?.message || "Gagal menyimpan jadwal.", {
-            type: "error",
-          }),
-      }
-    );
-  };
+  const activeDaysCount = useMemo(
+    () => Object.values(schedule?.dailyTimes || {}).filter(Boolean).length,
+    [schedule?.dailyTimes]
+  );
+  const activeManualAnnouncementsCount = useMemo(
+    () =>
+      (schedule?.manualOverrides || []).filter((item) => !item?.consumedAt)
+        .length,
+    [schedule?.manualOverrides]
+  );
 
   const metrics = useMemo(
     () => [
       {
         label: "Status Jadwal",
-        value: schedule ? (schedule.paused ? "Dijeda" : "Aktif") : "Memuat…",
+        value: schedule ? (schedule.paused ? "Dijeda" : "Aktif") : "Memuat...",
         helper: schedule
           ? schedule.paused
-            ? "Penjadwalan otomatis sedang dihentikan sementara."
-            : "Penjadwalan berjalan sesuai jadwal default."
+            ? "Pengiriman otomatis sedang dijeda."
+            : "Pengiriman berjalan sesuai konfigurasi."
           : "Menunggu data jadwal dari server.",
         tone: schedule?.paused ? "amber" : "emerald",
       },
       {
-        label: "Zona Waktu",
+        label: "Zona Waktu Aktif",
         value: schedule?.timezone || "Asia/Makassar",
         helper: schedule
-          ? "Digunakan sebagai acuan perhitungan jadwal."
+          ? "Dipakai untuk menghitung jadwal."
           : "Menunggu data jadwal dari server.",
         tone: "sky",
       },
       {
-        label: "Override Aktif",
-        value: schedule?.manualOverrides?.length ?? "…",
-        helper: schedule?.manualOverrides?.length
-          ? "Override akan otomatis terhapus setelah digunakan."
+        label: "Hari Terjadwal",
+        value: schedule ? String(activeDaysCount) : "Memuat...",
+        helper: schedule
+          ? "Jumlah hari dengan jam kirim aktif."
+          : "Menghitung konfigurasi dari server.",
+        tone: "slate",
+      },
+      {
+        label: "Pengumuman Aktif",
+        value: String(activeManualAnnouncementsCount),
+        helper: activeManualAnnouncementsCount
+          ? "Pengumuman terjadwal otomatis ditandai selesai setelah terkirim."
           : schedule
-          ? "Belum ada override manual."
+          ? "Belum ada pengumuman terjadwal."
           : "Menunggu data jadwal dari server.",
         tone: "slate",
       },
     ],
-    [schedule]
+    [schedule, activeDaysCount, activeManualAnnouncementsCount]
   );
 
-  // validasi waktu per hari
-  const invalidDays = useMemo(() => {
-    return Object.entries(dailyTimes)
-      .filter(([, v]) => !isValidTimeHHMM(v))
-      .map(([d]) => Number(d));
-  }, [dailyTimes]);
-
-  // validasi timezone
-  const tzValid = isValidIanaTZ(timezone);
-  const tzNow = tzValid ? nowInTZ(timezone) : "";
-  const tzSuffix = TZ_LABEL[timezone];
-
-  // dirty check
-  const scheduleDirty = useMemo(() => {
-    const normalized = Object.fromEntries(
-      Object.entries(dailyTimes).map(([d, v]) => [d, v || null])
-    );
-    const server = Object.fromEntries(
-      Object.entries({ ...DEFAULT_TIMES, ...(schedule?.dailyTimes || {}) }).map(
-        ([d, v]) => [d, v || null]
-      )
-    );
-    return (
-      JSON.stringify(normalized) !== JSON.stringify(server) ||
-      timezone !== (schedule?.timezone || "Asia/Makassar") ||
-      Boolean(paused) !== Boolean(schedule?.paused)
-    );
-  }, [
-    dailyTimes,
-    timezone,
-    paused,
-    schedule?.dailyTimes,
-    schedule?.timezone,
-    schedule?.paused,
-  ]);
-
-  const disableSave =
-    updateScheduleMutation.isLoading || invalidDays.length > 0 || !tzValid;
+  const scheduleTimezone = schedule?.timezone || "Asia/Makassar";
+  const scheduleTzSuffix = TZ_LABEL[scheduleTimezone];
 
   return (
     <AdminLayout
@@ -247,32 +175,54 @@ export default function AdminDashboardPage() {
       isLoggingOut={logoutMutation.isLoading}
       loading={sessionLoading}
     >
-      <div className="space-y-12">
-        {/* Ringkasan + Kontrol Bot */}
-        <section className="grid gap-8 lg:grid-cols-[2fr,1fr]">
-          <Card className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/80 p-8 shadow-xl backdrop-blur-md">
-            <div className="absolute inset-y-0 right-[-40%] -z-10 hidden w-3/4 bg-gradient-to-l from-primary-500/20 to-transparent blur-3xl lg:block" />
-            <div className="flex h-full flex-col justify-between gap-6">
-              <div className="space-y-5">
-                <Badge variant="info" className="w-fit uppercase tracking-wide">
-                  Ringkasan Harian
-                </Badge>
-                <h1 className="text-4xl font-bold text-white">
-                  Halo, {session?.user?.username || "Admin"}!
-                </h1>
-                <p className="max-w-xl text-base text-slate-400">
-                  Pantau performa bot dan jadwal pengiriman. Gunakan panel di
-                  bawah untuk mengatur jadwal default dan memantau log aktivitas
-                  terkini.
-                </p>
-                {isScheduleUpdating && (
-                  <div className="flex items-center gap-2 text-xs font-medium text-primary-200 animate-pulse">
-                    <Spinner size="sm" />
-                    <span>Pembaruan data jadwal sedang diproses…</span>
+      <div className="ds-page-stack">
+        <section className="grid gap-5 lg:grid-cols-[minmax(0,1.75fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(0,1.85fr)_minmax(340px,1fr)]">
+          <Card className="relative overflow-hidden border-border/70 bg-[linear-gradient(145deg,hsl(var(--card))_0%,hsl(var(--card))_46%,hsl(var(--primary)/0.05)_100%)] p-5 shadow-md sm:p-7">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-r from-primary/12 via-info/6 to-transparent" />
+            <div className="pointer-events-none absolute -left-16 -top-20 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
+            <div className="relative flex h-full flex-col gap-6">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <h1 className="dashboard-hero-title text-2xl font-semibold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
+                      Halo, {session?.user?.username || "Admin"}.
+                    </h1>
+                    <p className="dashboard-hero-copy max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+                      Halaman manajemen status bot, log operasional, dan ringkasan jadwal.
+                    </p>
                   </div>
-                )}
+                </div>
               </div>
-              <div className="grid gap-6 sm:grid-cols-3">
+
+              <div className="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs">
+                <span className="rounded-full border border-border/70 bg-background/75 px-2.5 py-1 text-muted-foreground">
+                  Sinkron terakhir: {formatUpdatedAt(scheduleUpdatedAt)}
+                </span>
+                <span className="rounded-full border border-border/70 bg-background/75 px-2.5 py-1 text-muted-foreground">
+                  Zona aktif: {scheduleTimezone}
+                </span>
+                <span className="rounded-full border border-border/70 bg-background/75 px-2.5 py-1 text-muted-foreground">
+                  Status bot dipantau realtime
+                </span>
+              </div>
+
+              {isScheduleUpdating ? (
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/35 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary sm:text-xs">
+                  <Spinner size="sm" />
+                  <span>Data jadwal sedang disinkronkan...</span>
+                </div>
+              ) : null}
+
+              {scheduleError ? (
+                <QueryErrorNotice
+                  error={scheduleErrorState}
+                  fallbackMessage="Data jadwal belum dapat dimuat dari server."
+                  onRetry={() => refetchSchedule()}
+                  retryLabel="Muat ulang jadwal"
+                />
+              ) : null}
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {metrics.map((metric) => (
                   <MetricCard
                     key={metric.label}
@@ -281,310 +231,175 @@ export default function AdminDashboardPage() {
                     helper={metric.helper}
                     tone={metric.tone}
                     loading={isSchedulePending}
-                    loadingTone="onDark"
+                    loadingTone="onLight"
                   />
                 ))}
               </div>
             </div>
           </Card>
+
           <BotControlPanel />
         </section>
 
-        {/* Tabs: Log | Jadwal | Berikutnya */}
         <section>
-          <Card className="space-y-6 border-white/10 bg-slate-900/70 p-0">
-            <div className="px-4 pt-4">
+          <Card className="overflow-hidden border-border/70 bg-[linear-gradient(180deg,hsl(var(--card))_0%,hsl(var(--muted)/0.2)_100%)] p-0">
+            <div className="border-b border-border/70 bg-background/35 px-4 py-4 sm:px-6">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-1">
+                  <h2 className="dashboard-section-title text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+                    Panel Operasional
+                  </h2>
+                  <p className="text-xs leading-5 text-muted-foreground sm:text-sm">
+                    Gunakan tab untuk memantau log, melihat jadwal, dan memvalidasi pengiriman berikutnya.
+                  </p>
+                </div>
+              </div>
+
               <div
                 role="tablist"
-                aria-label="Panel Admin"
-                ref={tablistRef}
-                className="inline-flex w-full max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-white/10 bg-slate-950/60 p-1 text-sm"
+                aria-label="Panel operasional dashboard"
+                onKeyDown={handleTabsNavigation}
+                className="grid gap-2 rounded-2xl border border-border/70 bg-muted/20 p-1 sm:grid-cols-3"
               >
-                {[
-                  { id: "logs", label: "Log" },
-                  { id: "schedule", label: "Jadwal" },
-                  { id: "next", label: "Berikutnya" },
-                ].map((t) => {
-                  const selected = panelTab === t.id;
+                {PANEL_TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  const selected = panelTab === tab.id;
+
                   return (
                     <button
-                      key={t.id}
+                      key={tab.id}
+                      id={`tab-${tab.id}`}
+                      type="button"
                       role="tab"
                       aria-selected={selected}
-                      aria-controls={`panel-${t.id}`}
-                      id={`tab-${t.id}`}
-                      onClick={() => setPanelTab(t.id)}
-                      className={
+                      aria-controls={`panel-${tab.id}`}
+                      tabIndex={selected ? 0 : -1}
+                      onClick={() => setPanelTab(tab.id)}
+                      className={`rounded-xl border px-3 py-2 text-left transition-[background-color,border-color,color] sm:px-4 sm:py-3 ${
                         selected
-                          ? "flex-1 rounded-lg bg-primary-500/20 px-4 py-2 font-semibold text-white shadow-inner shadow-primary-500/20"
-                          : "flex-1 rounded-lg px-4 py-2 text-slate-300 hover:bg-white/5 hover:text-white"
-                      }
+                          ? "border-primary/40 bg-[linear-gradient(145deg,hsl(var(--primary)/0.14),hsl(var(--info)/0.08))] text-foreground shadow-sm"
+                          : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-background/60 hover:text-foreground"
+                      }`}
                     >
-                      {t.label}
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`grid h-6 w-6 place-items-center rounded-md border ${
+                            selected
+                              ? "border-primary/35 bg-primary/10 text-primary"
+                              : "border-border/60 bg-background/60 text-muted-foreground"
+                          }`}
+                        >
+                          <Icon className="h-3.5 w-3.5 flex-none" />
+                        </span>
+                        <span className="text-sm font-semibold">{tab.label}</span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground sm:text-xs">{tab.hint}</p>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            <div className="p-6">
-              {/* LOGS */}
+            <div className="p-4 sm:p-6">
               <div
                 role="tabpanel"
                 id="panel-logs"
                 aria-labelledby="tab-logs"
                 hidden={panelTab !== "logs"}
-                className="sm:max-h-none max-h-[480px]"
               >
-                {panelTab === "logs" && <LogsPanel />}
+                {panelTab === "logs" ? <LogsPanel embedded /> : null}
               </div>
 
-              {/* SCHEDULE */}
               <div
                 role="tabpanel"
                 id="panel-schedule"
                 aria-labelledby="tab-schedule"
                 hidden={panelTab !== "schedule"}
               >
-                {panelTab === "schedule" && (
+                {panelTab === "schedule" ? (
                   <div className="space-y-6">
-                    <div className="flex flex-col gap-2">
-                      <h2 className="text-xl font-semibold text-white">
-                        Pengaturan Jadwal Otomatis
-                      </h2>
-                      <p className="text-sm text-slate-400">
-                        Sesuaikan jam pengiriman untuk setiap hari serta zona
-                        waktu yang digunakan sistem.
-                      </p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <MetricCard
+                        label="Status Penjadwalan"
+                        value={schedule ? (schedule.paused ? "Sedang dijeda" : "Aktif") : "Memuat..."}
+                        helper={
+                          schedule
+                            ? schedule.paused
+                              ? "Pengiriman otomatis sedang dijeda."
+                              : "Pengiriman otomatis aktif."
+                            : "Menunggu data jadwal dari server."
+                        }
+                        tone={schedule?.paused ? "amber" : "emerald"}
+                        loading={isSchedulePending}
+                        loadingTone="onLight"
+                      />
+                      <MetricCard
+                        label="Zona Waktu Aktif"
+                        value={scheduleTimezone}
+                        helper={
+                          schedule
+                            ? scheduleTzSuffix
+                              ? `Format tampilan: ${scheduleTzSuffix}`
+                              : "Zona waktu server"
+                            : "Menunggu data jadwal dari server."
+                        }
+                        tone="sky"
+                        loading={isSchedulePending}
+                        loadingTone="onLight"
+                      />
+                      <MetricCard
+                        label="Hari Terjadwal"
+                        value={schedule ? String(activeDaysCount) : "Memuat..."}
+                        helper={
+                          schedule
+                            ? "Jumlah hari dengan jam kirim aktif."
+                            : "Menghitung konfigurasi dari server."
+                        }
+                        tone="sky"
+                        loading={isSchedulePending}
+                        loadingTone="onLight"
+                      />
                     </div>
 
-                    <form className="space-y-6" onSubmit={handleScheduleSubmit}>
-                      {/* Grid jadwal */}
+                    {isSchedulePending ? (
+                      <ScheduleGrid loading readOnly values={null} />
+                    ) : (
                       <ScheduleGrid
-                        values={dailyTimes}
-                        onChange={setDailyTimes}
-                        timeSuffix={tzSuffix}
+                        readOnly
+                        values={schedule?.dailyTimes}
+                        timeSuffix={scheduleTzSuffix}
                       />
+                    )}
 
-                      {/* Validasi waktu */}
-                      {invalidDays.length > 0 && (
-                        <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-100">
-                          <div className="flex items-start gap-2">
-                            <Info className="mt-0.5 h-4 w-4 flex-none" />
-                            <span>
-                              Format waktu tidak valid pada:{" "}
-                              <strong>
-                                {invalidDays
-                                  .map((d) => DAY_NAMES[d] || d)
-                                  .join(", ")}
-                              </strong>{" "}
-                              (gunakan format 24 jam <code>HH:MM</code>, mis.
-                              <code> 07:30</code>).
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Zona waktu + pause */}
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="timezone">Zona waktu</Label>
-                          <div className="relative">
-                            <Input
-                              id="timezone"
-                              list="tz-list"
-                              value={timezone}
-                              onChange={(e) => setTimezone(e.target.value)}
-                              required
-                              aria-invalid={!tzValid}
-                              className="rounded-lg border-slate-700 bg-slate-900/60 pr-28"
-                              placeholder="Asia/Makassar"
-                            />
-                            <datalist id="tz-list">
-                              <option value="Asia/Jakarta">WIB</option>
-                              <option value="Asia/Makassar">WITA</option>
-                              <option value="Asia/Jayapura">WIT</option>
-                            </datalist>
-                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-slate-200">
-                              {TZ_LABEL[timezone] || "TZ"}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-500">
-                            Gunakan IANA TZ, mis. <code>Asia/Makassar</code>,{" "}
-                            <code>Asia/Jakarta</code>, atau{" "}
-                            <code>Asia/Jayapura</code>.
-                          </p>
-                          <p
-                            className={`text-xs ${
-                              tzValid ? "text-slate-400" : "text-rose-300"
-                            }`}
-                          >
-                            {tzValid
-                              ? `Sekarang di ${timezone}: ${tzNow}`
-                              : "Zona waktu tidak dikenali."}
-                          </p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Status penjadwalan</Label>
-                          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-slate-950/70 p-3">
-                            <input
-                              id="paused"
-                              type="checkbox"
-                              className="h-4 w-4 accent-primary-500"
-                              checked={paused}
-                              onChange={(e) => setPaused(e.target.checked)}
-                            />
-                            <label
-                              htmlFor="paused"
-                              className="text-sm text-slate-300"
-                            >
-                              Jeda pengiriman otomatis{" "}
-                              <span className="opacity-70">
-                                (override manual tetap berjalan)
-                              </span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Error API */}
-                      {updateScheduleMutation.error && (
-                        <p className="text-sm text-rose-300">
-                          {updateScheduleMutation.error.message}
-                        </p>
-                      )}
-
-                      {/* Actions */}
-                      <div className="flex justify-end gap-3">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={async () => {
-                            if (!schedule) return;
-                            const ok = await confirm({
-                              title: "Reset perubahan?",
-                              message:
-                                "Perubahan yang belum disimpan akan hilang.",
-                              confirmText: "Ya, reset",
-                              variant: "warning",
-                            });
-                            if (!ok) return;
-                            setDailyTimes({
-                              ...DEFAULT_TIMES,
-                              ...(schedule.dailyTimes || {}),
-                            });
-                            setTimezone(schedule.timezone || "Asia/Makassar");
-                            setPaused(Boolean(schedule.paused));
-                            addToast("Perubahan jadwal direset.", {
-                              type: "info",
-                            });
-                          }}
-                          className="inline-flex items-center gap-2 rounded-lg"
-                        >
-                          <RotateCcw className="h-4 w-4" /> Reset
-                        </Button>
-
-                        <Button
-                          type="submit"
-                          disabled={disableSave}
-                          className="
-      inline-flex items-center gap-2 rounded-lg px-4 py-2
-      bg-sky-600 text-on-accent hover:bg-sky-500
-      border border-sky-400/30 shadow-lg shadow-sky-600/20
-      disabled:opacity-60
-    "
-                        >
-                          {updateScheduleMutation.isLoading ? (
-                            "Menyimpan…"
-                          ) : (
-                            <>
-                              <Save className="h-4 w-4" /> Simpan
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </form>
+                    {schedule?.paused ? (
+                      <ToneSurface tone="warning" size="md" className="text-xs sm:text-sm">
+                        Penjadwalan otomatis sementara dijeda. Pengumuman terjadwal tetap berjalan.
+                      </ToneSurface>
+                    ) : null}
                   </div>
-                )}
+                ) : null}
               </div>
 
-              {/* NEXT */}
               <div
                 role="tabpanel"
                 id="panel-next"
                 aria-labelledby="tab-next"
                 hidden={panelTab !== "next"}
               >
-                {panelTab === "next" && (
-                  <NextRunCard nextRun={nextRun} loading={nextRunLoading} />
-                )}
+                {panelTab === "next" ? (
+                  <NextRunCard
+                    nextRun={nextRun}
+                    loading={nextRunLoading}
+                    error={nextRunError ? nextRunErrorState : null}
+                    onRetry={() => refetchNextRun()}
+                    embedded
+                  />
+                ) : null}
               </div>
             </div>
           </Card>
-
-          {/* Sticky Action Bar (muncul jika jadwal berubah) */}
-          {panelTab === "schedule" && scheduleDirty && (
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/80 backdrop-blur supports-[backdrop-filter]:backdrop-blur-md">
-              <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-                <p className="text-xs text-slate-300">
-                  <span className="inline-flex items-center gap-1">
-                    <Info className="h-3.5 w-3.5" />
-                    Perubahan belum disimpan
-                  </span>
-                  {invalidDays.length > 0 && (
-                    <>
-                      {" "}
-                      •{" "}
-                      <span className="text-amber-200">
-                        Perbaiki waktu tidak valid
-                      </span>
-                    </>
-                  )}
-                  {!tzValid && (
-                    <>
-                      {" "}
-                      •{" "}
-                      <span className="text-rose-200">
-                        Zona waktu tidak valid
-                      </span>
-                    </>
-                  )}
-                </p>
-                <div className="flex gap-3">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={async () => {
-                      if (!schedule) return;
-                      const ok = await confirm({
-                        title: "Reset perubahan?",
-                        message: "Perubahan yang belum disimpan akan hilang.",
-                        confirmText: "Ya, reset",
-                        variant: "warning",
-                      });
-                      if (!ok) return;
-                      setDailyTimes({
-                        ...DEFAULT_TIMES,
-                        ...(schedule.dailyTimes || {}),
-                      });
-                      setTimezone(schedule.timezone || "Asia/Makassar");
-                      setPaused(Boolean(schedule.paused));
-                      addToast("Perubahan jadwal direset.", { type: "info" });
-                    }}
-                  >
-                    Reset
-                  </Button>
-                  <Button onClick={handleScheduleSubmit} disabled={disableSave}>
-                    Simpan
-                  </Button>
-                </div>
-              </div>
-              {/* safe area untuk iOS */}
-              <div className="h-[env(safe-area-inset-bottom,0)]" />
-            </div>
-          )}
         </section>
+
       </div>
     </AdminLayout>
   );

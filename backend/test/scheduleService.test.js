@@ -5,6 +5,16 @@ const fssync = require('node:fs');
 const path = require('node:path');
 const moment = require('moment-timezone');
 
+function setupTestEnv() {
+  process.env.NODE_ENV = 'test';
+  process.env.SESSION_SECRET = 'test-session-secret-1234';
+  process.env.ADMIN_USERNAME = 'admin';
+  process.env.ADMIN_PASSWORD = 'change_me_123456';
+  process.env.ADMIN_PASSWORD_HASH = '';
+}
+
+setupTestEnv();
+
 const {
   scheduler: { defaultSchedule: DEFAULT_SCHEDULE },
 } = require('../src/config/env');
@@ -177,5 +187,205 @@ test('keeps the current slot when the reference time is within the grace window'
   assert.equal(
     nextRun.targetMoment.clone().tz(TIMEZONE).format(`${APP_DATE_FORMAT} HH:mm`),
     '02-07-2024 16:00'
+  );
+});
+
+test('setSchedule rejects invalid IANA timezone', async () => {
+  const scheduleDocument = {
+    timezone: TIMEZONE,
+    dailyTimes: { ...DEFAULT_SCHEDULE.dailyTimes },
+    manualOverrides: [],
+    paused: false,
+    lastUpdatedAt: new Date('2024-06-01T00:00:00Z').toISOString(),
+    updatedBy: 'system',
+    defaultVersion: DEFAULT_SCHEDULE_VERSION,
+  };
+
+  await seedSchedule(scheduleDocument);
+  const { setSchedule, getSchedule } = loadService();
+
+  await assert.rejects(
+    () => setSchedule({ timezone: 'Mars/OlympusMons' }),
+    (err) => {
+      assert.equal(err.status, 400);
+      assert.match(err.message, /Timezone tidak valid/i);
+      return true;
+    }
+  );
+
+  const current = await getSchedule();
+  assert.equal(current.timezone, TIMEZONE);
+});
+
+test('setSchedule accepts valid IANA timezone (Asia/Makassar)', async () => {
+  const scheduleDocument = {
+    timezone: 'Asia/Jakarta',
+    dailyTimes: { ...DEFAULT_SCHEDULE.dailyTimes },
+    manualOverrides: [],
+    paused: false,
+    lastUpdatedAt: new Date('2024-06-01T00:00:00Z').toISOString(),
+    updatedBy: 'system',
+    defaultVersion: DEFAULT_SCHEDULE_VERSION,
+  };
+
+  await seedSchedule(scheduleDocument);
+  const { setSchedule } = loadService();
+
+  const updated = await setSchedule({ timezone: 'Asia/Makassar' });
+
+  assert.equal(updated.timezone, 'Asia/Makassar');
+});
+
+test('parallel schedule mutations keep schedule-config JSON valid', async () => {
+  const scheduleDocument = {
+    timezone: TIMEZONE,
+    dailyTimes: { ...DEFAULT_SCHEDULE.dailyTimes },
+    manualOverrides: [],
+    paused: false,
+    lastUpdatedAt: new Date('2024-06-01T00:00:00Z').toISOString(),
+    updatedBy: 'system',
+    defaultVersion: DEFAULT_SCHEDULE_VERSION,
+  };
+
+  await seedSchedule(scheduleDocument);
+  const { setSchedule, addManualOverride, removeManualOverride } = loadService();
+
+  const baseDate = moment.tz('01-12-2030', APP_DATE_FORMAT, true, TIMEZONE);
+  const operations = [];
+
+  for (let i = 0; i < 40; i += 1) {
+    const date = baseDate.clone().add(i, 'day').format(APP_DATE_FORMAT);
+    const hour = String(i % 24).padStart(2, '0');
+
+    operations.push(
+      setSchedule(
+        {
+          dailyTimes: {
+            1: `${hour}:00`,
+          },
+        },
+        { updatedBy: `stress-${i}` }
+      )
+    );
+    operations.push(
+      addManualOverride(
+        {
+          date,
+          time: '10:30',
+          note: `stress-${i}`,
+        },
+        { updatedBy: 'stress-test' }
+      )
+    );
+    operations.push(removeManualOverride(date));
+  }
+
+  await Promise.all(operations);
+
+  const persisted = await readScheduleFile();
+  assert.ok(persisted && typeof persisted === 'object');
+  assert.ok(typeof persisted.timezone === 'string' && persisted.timezone.length > 0);
+  assert.ok(persisted.dailyTimes && typeof persisted.dailyTimes === 'object');
+  assert.ok(Array.isArray(persisted.manualOverrides));
+});
+
+test('manual announcement is additional and does not replace the default daily schedule', async () => {
+  const scheduleDocument = {
+    timezone: TIMEZONE,
+    dailyTimes: { ...DEFAULT_SCHEDULE.dailyTimes },
+    manualOverrides: [],
+    paused: false,
+    lastUpdatedAt: new Date('2024-06-01T00:00:00Z').toISOString(),
+    updatedBy: 'system',
+    defaultVersion: DEFAULT_SCHEDULE_VERSION,
+  };
+
+  await seedSchedule(scheduleDocument);
+  const { addManualOverride, getNextRun } = loadService();
+
+  await addManualOverride({
+    date: '03-12-2030',
+    time: '14:00',
+    note: 'Rapat mendadak',
+    messageMode: 'custom-message',
+    customMessage: 'Halo {name}, rapat pukul 14:00.',
+  });
+
+  const manualRun = await getNextRun({
+    referenceMoment: moment.tz(
+      '03-12-2030 13:00',
+      `${APP_DATE_FORMAT} HH:mm`,
+      true,
+      TIMEZONE
+    ),
+  });
+
+  assert.ok(manualRun, 'expected manual announcement run');
+  assert.ok(manualRun.override, 'expected manual announcement payload');
+  assert.equal(
+    manualRun.targetMoment.clone().tz(TIMEZONE).format(`${APP_DATE_FORMAT} HH:mm`),
+    '03-12-2030 14:00'
+  );
+
+  const defaultRunAfterManual = await getNextRun({
+    referenceMoment: moment.tz(
+      '03-12-2030 14:01',
+      `${APP_DATE_FORMAT} HH:mm`,
+      true,
+      TIMEZONE
+    ),
+  });
+
+  assert.ok(defaultRunAfterManual, 'expected default run after manual announcement');
+  assert.equal(defaultRunAfterManual.override, null);
+  assert.equal(
+    defaultRunAfterManual.targetMoment
+      .clone()
+      .tz(TIMEZONE)
+      .format(`${APP_DATE_FORMAT} HH:mm`),
+    '03-12-2030 16:00'
+  );
+});
+
+test('manual announcement stores custom message mode and rejects collision with default time', async () => {
+  const scheduleDocument = {
+    timezone: TIMEZONE,
+    dailyTimes: { ...DEFAULT_SCHEDULE.dailyTimes },
+    manualOverrides: [],
+    paused: false,
+    lastUpdatedAt: new Date('2024-06-01T00:00:00Z').toISOString(),
+    updatedBy: 'system',
+    defaultVersion: DEFAULT_SCHEDULE_VERSION,
+  };
+
+  await seedSchedule(scheduleDocument);
+  const { addManualOverride, getSchedule } = loadService();
+
+  await addManualOverride({
+    date: '04-12-2030',
+    time: '13:15',
+    note: 'Info koordinasi',
+    messageMode: 'custom-message',
+    customMessage: 'Halo {name}, ada pengumuman penting.',
+  });
+
+  const schedule = await getSchedule();
+  const added = schedule.manualOverrides.find(
+    (item) => item.date === '04-12-2030' && item.time === '13:15'
+  );
+
+  assert.ok(added, 'expected persisted manual announcement');
+  assert.equal(added.messageMode, 'custom-message');
+  assert.equal(added.customMessage, 'Halo {name}, ada pengumuman penting.');
+
+  await assert.rejects(
+    () =>
+      addManualOverride({
+        date: '04-12-2030',
+        time: '16:00',
+        note: 'Bentrok jadwal default',
+        messageMode: 'default-template',
+      }),
+    /bentrok dengan jadwal otomatis/i
   );
 });

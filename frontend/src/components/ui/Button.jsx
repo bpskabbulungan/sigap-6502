@@ -1,75 +1,98 @@
 import clsx from "clsx";
+import { Spinner } from "./Spinner";
 
 const baseClasses =
-  "inline-flex items-center justify-center gap-2 rounded-xl font-semibold cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60";
-
-// Variant styles (fill)
-const ACCENT_VARIANTS = new Set(["primary", "danger", "success"]);
+  "relative inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-xl font-semibold transition-[transform,background-color,border-color,color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-px disabled:pointer-events-none disabled:opacity-55";
 
 const variants = {
-  // ⬇️ KEMBALI KE DEFINISI ASLI KAMU (tanpa text-white tambahan)
   primary:
-    "bg-primary-600 shadow-lg shadow-primary-600/40 hover:bg-primary-500 focus-visible:ring-primary-600",
+    "border border-primary/80 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
   secondary:
-    "bg-slate-800 text-slate-100 shadow-inner shadow-slate-900/40 hover:bg-slate-700 focus-visible:ring-slate-500",
+    "border border-border/85 bg-secondary text-secondary-foreground shadow-sm hover:bg-muted",
   ghost:
-    "bg-transparent text-slate-100 hover:bg-slate-800/60 focus-visible:ring-slate-500",
-  danger:
-    "bg-rose-600 shadow-lg shadow-rose-600/40 hover:bg-rose-500 focus-visible:ring-rose-600",
+    "border border-transparent bg-transparent text-foreground hover:bg-muted/70",
+  destructive:
+    "border border-destructive/75 bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
   success:
-    "bg-emerald-600 shadow-lg shadow-emerald-600/40 hover:bg-emerald-500 focus-visible:ring-emerald-600",
+    "border border-success/75 bg-success text-success-foreground shadow-sm hover:bg-success/90",
+  info:
+    "border border-info/75 bg-info text-info-foreground shadow-sm hover:bg-info/90",
+  warning:
+    "border border-warning/75 bg-warning text-warning-foreground shadow-sm hover:bg-warning/90",
 };
 
-// Variant styles (outline)
 const outlines = {
   primary:
-    "border border-primary-600/50 text-primary-200 hover:bg-primary-600/10 focus-visible:ring-primary-600",
+    "border border-primary/45 bg-transparent text-primary hover:bg-primary/10",
   secondary:
-    "border border-slate-600 text-slate-200 hover:bg-slate-700/40 focus-visible:ring-slate-500",
+    "border border-border bg-transparent text-foreground hover:bg-muted/70",
   ghost:
-    "border border-transparent text-slate-100 hover:bg-slate-800/60 focus-visible:ring-slate-500",
-  danger:
-    "border border-rose-600/50 text-rose-200 hover:bg-rose-600/10 focus-visible:ring-rose-600",
+    "border border-transparent bg-transparent text-foreground hover:bg-muted/70",
+  destructive:
+    "border border-destructive/50 bg-transparent text-destructive hover:bg-destructive/10",
   success:
-    "border border-emerald-600/50 text-emerald-200 hover:bg-emerald-600/10 focus-visible:ring-emerald-600",
+    "border border-success/50 bg-transparent text-success hover:bg-success/10",
+  info:
+    "border border-info/50 bg-transparent text-info hover:bg-info/10",
+  warning:
+    "border border-warning/55 bg-transparent text-warning hover:bg-warning/10",
 };
 
-// Sizes
 const sizes = {
-  sm: "px-3 py-1.5 text-xs",
-  md: "px-4 py-2 text-sm",
-  lg: "px-6 py-3 text-base",
+  sm: "h-9 px-3.5 text-xs",
+  md: "h-10 px-4 text-sm",
+  lg: "h-12 px-5 text-base",
+};
+
+const iconOnlySizes = {
+  sm: "h-9 w-9 p-0",
+  md: "h-10 w-10 p-0",
+  lg: "h-12 w-12 p-0",
+};
+
+const iconOnlySolidOverrides = {
+  success: "!border-emerald-700 !bg-emerald-600 !text-white hover:!bg-emerald-700",
+  info: "!border-sky-700 !bg-sky-600 !text-white hover:!bg-sky-700",
+  destructive: "!border-red-700 !bg-red-600 !text-white hover:!bg-red-700",
+  warning: "!border-amber-700 !bg-amber-500 !text-slate-950 hover:!bg-amber-600",
 };
 
 export function Button({
   variant = "primary",
   outline = false,
   size = "md",
-  iconOnly = false, // ⬅️ hanya tambah ini
+  iconOnly = false,
+  loading = false,
+  loadingText,
   className,
   children,
+  disabled,
   ...props
 }) {
-  const iconTint =
-    outline && variant === "danger" && iconOnly
-      ? "text-rose-600 hover:text-rose-700 [.theme-dark_&]:text-rose-300 [.theme-dark_&]:hover:text-rose-200"
-      : "";
+  const legacyAliases = { danger: "destructive" };
+  const normalizedVariant = legacyAliases[variant] ?? variant;
+  const resolvedVariant = variants[normalizedVariant] ? normalizedVariant : "primary";
+  const iconOnlyVariantClass =
+    iconOnly && !outline ? iconOnlySolidOverrides[resolvedVariant] : null;
+  const isDisabled = Boolean(disabled || loading);
 
   return (
     <button
-      data-accent={
-        !outline && ACCENT_VARIANTS.has(variant) ? variant : undefined
-      }
+      aria-busy={loading || undefined}
+      disabled={isDisabled}
       className={clsx(
         baseClasses,
-        iconOnly ? "h-9 w-9 p-0 gap-0 rounded-lg" : sizes[size], // ⬅️ ukuran khusus ikon-only
-        outline ? outlines[variant] : variants[variant],
-        iconTint,
+        iconOnly
+          ? (iconOnlySizes[size] ?? iconOnlySizes.md)
+          : (sizes[size] ?? sizes.md),
+        outline ? outlines[resolvedVariant] : variants[resolvedVariant],
+        iconOnlyVariantClass,
         className
       )}
       {...props}
     >
-      {children}
+      {loading ? <Spinner size="sm" className="text-current" /> : null}
+      {iconOnly && loading ? null : loading && loadingText ? loadingText : children}
     </button>
   );
 }

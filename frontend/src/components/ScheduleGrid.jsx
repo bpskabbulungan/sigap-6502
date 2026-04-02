@@ -20,19 +20,20 @@ export function ScheduleGrid({
   readOnly = false,
   loading = false,
   timeSuffix,
+  invalidDays = [],
 }) {
-  // Loading state
+  const invalidDaySet = new Set((invalidDays || []).map(Number));
+
   if (loading) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
         {Array.from({ length: 6 }).map((_, index) => (
-          <Skeleton key={index} className="h-32" />
+          <Skeleton key={index} className="h-36 rounded-2xl" />
         ))}
       </div>
     );
   }
 
-  // Data belum ada saat editable
   if (!readOnly && !values) {
     return (
       <DataPlaceholder
@@ -43,33 +44,51 @@ export function ScheduleGrid({
     );
   }
 
-  // Grid utama
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
       {Object.entries(dayLabels).map(([day, label]) => {
         const value = values?.[day] ?? "";
+        const numericDay = Number(day);
+        const isInvalid = !readOnly && invalidDaySet.has(numericDay);
+        const isWeekend = numericDay >= 6;
 
         return (
           <div
             key={day}
-            className={`flex flex-col gap-2 rounded-2xl border border-white/10 bg-slate-950/70 p-4 shadow-inner shadow-black/20 ${
-              !readOnly
-                ? "transition hover:border-primary-400/40 hover:shadow-md"
-                : ""
+            className={`flex flex-col gap-3 rounded-2xl border p-3 transition-[border-color,background-color,box-shadow] sm:p-4 ${
+              isInvalid
+                ? "border-destructive/55 bg-destructive/6 shadow-sm"
+                : isWeekend
+                ? "border-border/70 bg-[linear-gradient(160deg,hsl(var(--muted)/0.36),hsl(var(--warning)/0.06))] hover:border-warning/30"
+                : "border-border/70 bg-[linear-gradient(160deg,hsl(var(--card)),hsl(var(--primary)/0.04))] hover:border-primary/30"
             }`}
           >
-            <div className="flex items-center gap-2">
-              <Clock size={16} className="text-primary-400" />
-              <Label htmlFor={readOnly ? undefined : `day-${day}`}>
-                {label}
-              </Label>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Clock
+                  size={16}
+                  className={isInvalid ? "text-destructive" : "text-primary"}
+                />
+                <Label htmlFor={readOnly ? undefined : `day-${day}`} size="sm">
+                  {label}
+                </Label>
+              </div>
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                  isWeekend
+                    ? "border-warning/30 bg-warning/10 text-warning"
+                    : "border-border/70 bg-background/75 text-muted-foreground"
+                }`}
+              >
+                {isWeekend ? "Libur" : "Hari kerja"}
+              </span>
             </div>
 
             {readOnly ? (
-              <p className="text-lg font-semibold text-white">
+              <p className="text-base font-semibold text-foreground sm:text-lg">
                 {value
                   ? `${value}${timeSuffix ? ` ${timeSuffix}` : ""}`
-                  : Number(day) >= 6
+                  : isWeekend
                   ? "Libur"
                   : "Tidak dijadwalkan"}
               </p>
@@ -78,6 +97,9 @@ export function ScheduleGrid({
                 <Input
                   id={`day-${day}`}
                   type="time"
+                  size="sm"
+                  variant={isInvalid ? "error" : "default"}
+                  aria-invalid={isInvalid || undefined}
                   value={value || ""}
                   onChange={(event) =>
                     onChange({
@@ -87,15 +109,22 @@ export function ScheduleGrid({
                   }
                 />
                 {timeSuffix ? (
-                  <span className="text-sm font-medium text-slate-400">{timeSuffix}</span>
+                  <span className="text-xs font-medium text-muted-foreground sm:text-sm">
+                    {timeSuffix}
+                  </span>
                 ) : null}
               </div>
             )}
 
             {!readOnly && (
-              <p className="text-xs text-slate-500">
-                Kosongkan jika tidak ingin menjadwalkan pengiriman pada hari
-                ini.
+              <p
+                className={`text-[11px] leading-5 sm:text-xs ${
+                  isInvalid ? "text-destructive" : "text-muted-foreground"
+                }`}
+              >
+                {isInvalid
+                  ? "Format waktu harus HH:MM (24 jam)."
+                  : "Kosongkan jika tidak ingin menjadwalkan pengiriman pada hari ini."}
               </p>
             )}
           </div>
@@ -104,6 +133,3 @@ export function ScheduleGrid({
     </div>
   );
 }
-
-
-

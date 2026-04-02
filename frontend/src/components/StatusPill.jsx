@@ -1,18 +1,12 @@
 import { Badge } from "./ui/Badge";
 import clsx from "clsx";
-
-const DOT_COLOR_BY_VARIANT = {
-  default: 'var(--tone-neutral-dot)',
-  success: 'var(--tone-success-dot)',
-  danger: 'var(--tone-danger-dot)',
-  warning: 'var(--tone-warning-dot)',
-  info: 'var(--tone-info-dot)',
-};
+import { toneDotColor } from "../lib/toneVariants";
+import { toneFromStatus } from "../lib/statusVariantMap";
 
 const PHASE_CONFIG = {
   idle: { label: 'Bot belum berjalan', variant: 'default' },
   starting: { label: 'Menyalakan bot...', variant: 'warning' },
-  'waiting-qr': { label: 'Menunggu pemindaian QR', variant: 'warning' },
+  'waiting-qr': { label: 'Menunggu scan QR admin', variant: 'warning' },
   authenticated: { label: 'QR terscan, menunggu siap', variant: 'warning' },
   restarting: { label: 'Bot sedang restart', variant: 'warning' },
   ready: { label: 'Bot aktif', variant: 'success' },
@@ -34,8 +28,11 @@ export function StatusPill({
     : { label: labelInactive, variant: 'danger' };
 
   const phaseConfig = phaseKey ? PHASE_CONFIG[phaseKey] : undefined;
-  const variant = phaseConfig?.variant ?? fallback.variant;
-  const dotColor = DOT_COLOR_BY_VARIANT[variant] || DOT_COLOR_BY_VARIANT.default;
+  const variant = toneFromStatus(
+    phaseConfig?.variant ?? phaseKey ?? fallback.variant,
+    fallback.variant
+  );
+  const dotColor = toneDotColor(variant);
 
   let displayLabel = phaseConfig?.label ?? fallback.label;
   if (phaseKey === 'ready') {

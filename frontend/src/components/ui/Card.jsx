@@ -1,11 +1,12 @@
 import clsx from "clsx";
 
-const baseStyles = "rounded-2xl border shadow-xl backdrop-blur-sm transition-all focus-within:ring-1 card-surface";
+const baseStyles =
+  "card-surface rounded-2xl border border-border shadow-sm transition-all focus-within:ring-1 focus-within:ring-ring/35";
 
 const variants = {
-  default: "border-white/5 bg-slate-900/70 shadow-slate-900/40",
-  glass: "border-white/10 bg-white/5 shadow-black/20 backdrop-blur-md",
-  solid: "border-slate-800 bg-slate-900 shadow-slate-950/30",
+  default: "bg-card text-card-foreground",
+  glass: "bg-card text-card-foreground",
+  solid: "bg-muted/35 text-foreground",
 };
 
 const paddings = {
@@ -24,16 +25,18 @@ export function Card({
   ...props
 }) {
   return (
-    <div className={clsx(baseStyles, variants[variant], paddings[padding], className)} style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)" }} {...props}>
-      {header && (
-        <div className="mb-4 border-b border-white/10 pb-3">{header}</div>
+    <div
+      className={clsx(
+        baseStyles,
+        variants[variant] ?? variants.default,
+        paddings[padding] ?? paddings.md,
+        className
       )}
+      {...props}
+    >
+      {header && <div className="mb-4 border-b border-border pb-3">{header}</div>}
       {children}
-      {footer && (
-        <div className="mt-4 border-t border-white/10 pt-3">{footer}</div>
-      )}
+      {footer && <div className="mt-4 border-t border-border pt-3">{footer}</div>}
     </div>
   );
 }
-
-

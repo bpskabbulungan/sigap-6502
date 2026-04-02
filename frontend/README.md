@@ -5,7 +5,7 @@ Antarmuka web untuk platform WA Reminder. Aplikasi ini dibangun dengan React + V
 ## Ringkasan Fitur
 
 - **Halaman status publik** menampilkan jadwal pengiriman, status bot, statistik aktivitas, serta log terbaru yang dapat diakses tanpa autentikasi.
-- **Dashboard admin** untuk mengelola jadwal default, override harian, log aktivitas, dan memantau kesehatan bot secara real-time.
+- **Dashboard admin** untuk mengelola jadwal default, pengumuman terjadwal tambahan, log aktivitas, dan memantau kesehatan bot secara real-time.
 - **Editor template pesan** dengan pratinjau langsung agar tim dapat memperbarui konten broadcast tanpa menyentuh backend.
 - **Integrasi Socket.IO** untuk streaming status bot, log, dan jadwal terbaru tanpa perlu refresh halaman.
 - **Komponen Tailwind** dengan tema gelap (dark mode) yang konsisten dengan branding aplikasi.

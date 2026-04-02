@@ -40,7 +40,17 @@ async function apiRequest(path, options = {}) {
         : JSON.stringify(options.body);
   }
 
-  const response = await fetch(url, config);
+  let response;
+  try {
+    response = await fetch(url, config);
+  } catch (err) {
+    const error = new Error(
+      "Tidak dapat terhubung ke backend. Pastikan backend aktif dan URL API benar."
+    );
+    error.code = "NETWORK_ERROR";
+    error.cause = err;
+    throw error;
+  }
   const text = await response.text();
   let payload = text;
 

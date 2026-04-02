@@ -1,4 +1,4 @@
-const moment = require('moment-timezone');
+﻿const moment = require('moment-timezone');
 const { z } = require('zod');
 
 const {
@@ -12,6 +12,9 @@ const { forceReschedule } = require('../jobs/dailyJob');
 const config = require('../config/env');
 const { APP_DATE_REGEX, formatDateLabels } = require('../utils/dateFormatter');
 
+const MANUAL_MESSAGE_MODES = ['default-template', 'custom-message'];
+const CUSTOM_MESSAGE_MAX_LENGTH = 4000;
+
 const timeSchema = z
   .string()
   .trim()
@@ -19,9 +22,17 @@ const timeSchema = z
 
 const dayKeySchema = z.enum(['1', '2', '3', '4', '5', '6', '7']);
 
+const timezoneSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .refine((value) => Boolean(moment.tz.zone(value)), {
+    message: 'Timezone tidak valid. Gunakan timezone IANA, misalnya Asia/Makassar.',
+  });
+
 const updateScheduleSchema = z
   .object({
-    timezone: z.string().min(3).optional(),
+    timezone: timezoneSchema.optional(),
     paused: z.boolean().optional(),
     dailyTimes: z
       .record(dayKeySchema, z.union([timeSchema, z.null()]))
@@ -34,22 +45,85 @@ const overrideSchema = z
     date: z.string().trim().regex(APP_DATE_REGEX, 'Format tanggal DD-MM-YYYY'),
     time: timeSchema,
     note: z.string().max(255).nullable().optional(),
+    messageMode: z.enum(MANUAL_MESSAGE_MODES).optional(),
+    customMessage: z
+      .string()
+      .max(
+        CUSTOM_MESSAGE_MAX_LENGTH,
+        `Pesan custom maksimal ${CUSTOM_MESSAGE_MAX_LENGTH} karakter.`
+      )
+      .nullable()
+      .optional(),
+  })
+  .strict()
+  .superRefine((payload, ctx) => {
+    if (payload.messageMode !== 'custom-message') {
+      return;
+    }
+
+    if (!payload.customMessage || !payload.customMessage.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['customMessage'],
+        message: 'Pesan custom wajib diisi untuk mode pesan custom.',
+      });
+    }
+  });
+
+const removeOverrideParamsSchema = z
+  .object({
+    identifier: z.string().trim().min(1, 'Identifier wajib diisi.'),
   })
   .strict();
 
+function toHttpValidationError(err, fallbackMessage) {
+  if (!(err instanceof z.ZodError)) {
+    return err;
+  }
+
+  const message = err.issues?.[0]?.message || fallbackMessage;
+  const validationError = new Error(message);
+  validationError.status = 400;
+  return validationError;
+}
+
+function getActiveManualItems(schedule) {
+  return (schedule?.manualOverrides || [])
+    .filter((item) => !item.consumedAt)
+    .sort((a, b) => {
+      if (a.date === b.date) {
+        if (a.time < b.time) return -1;
+        if (a.time > b.time) return 1;
+        return 0;
+      }
+
+      const left = moment(a.date, 'DD-MM-YYYY', true);
+      const right = moment(b.date, 'DD-MM-YYYY', true);
+      if (left.isBefore(right, 'day')) return -1;
+      if (left.isAfter(right, 'day')) return 1;
+      return 0;
+    });
+}
+
 function sanitizeScheduleForPublic(schedule) {
+  const activeManualItems = getActiveManualItems(schedule);
+  const nextAnnouncement = activeManualItems.length
+    ? {
+        date: activeManualItems[0].date,
+        time: activeManualItems[0].time,
+        note: activeManualItems[0].note,
+      }
+    : null;
+
   return {
     timezone: schedule.timezone,
     dailyTimes: schedule.dailyTimes,
     paused: schedule.paused,
-    nextOverride: schedule.manualOverrides.length
-      ? {
-          date: schedule.manualOverrides[0].date,
-          time: schedule.manualOverrides[0].time,
-          note: schedule.manualOverrides[0].note,
-        }
-      : null,
-    overridesCount: schedule.manualOverrides.length,
+    nextAnnouncement,
+    announcementsCount: activeManualItems.length,
+    // Backward compatibility for older frontend/clients.
+    nextOverride: nextAnnouncement,
+    overridesCount: activeManualItems.length,
     lastUpdatedAt: schedule.lastUpdatedAt,
   };
 }
@@ -83,7 +157,7 @@ async function handleUpdateSchedule(req, res, next) {
 
     res.json({ schedule: updated });
   } catch (err) {
-    next(err);
+    next(toHttpValidationError(err, 'Payload jadwal tidak valid.'));
   }
 }
 
@@ -94,25 +168,41 @@ async function handleAddOverride(req, res, next) {
       updatedBy: req.session?.username || 'admin',
     });
 
-    await forceReschedule('override-added');
+    await forceReschedule('manual-announcement-added');
 
     res.status(201).json({ schedule: updated });
   } catch (err) {
-    next(err);
+    next(toHttpValidationError(err, 'Payload pengumuman tidak valid.'));
   }
 }
 
 async function handleRemoveOverride(req, res, next) {
   try {
-    const { date } = overrideSchema.pick({ date: true }).parse(req.params);
-    const updated = await removeManualOverride(date);
+    const identifier =
+      req.params?.identifier || req.params?.date || req.params?.id || '';
+    const parsedParams = removeOverrideParamsSchema.parse({ identifier });
+    const updated = await removeManualOverride(parsedParams.identifier);
 
-    await forceReschedule('override-removed');
+    await forceReschedule('manual-announcement-removed');
 
     res.json({ schedule: updated });
   } catch (err) {
-    next(err);
+    next(toHttpValidationError(err, 'Parameter penghapusan tidak valid.'));
   }
+}
+
+function sanitizeNextRunManualEvent(override) {
+  if (!override) {
+    return null;
+  }
+
+  return {
+    id: override.id,
+    date: override.date,
+    time: override.time,
+    note: override.note,
+    messageMode: override.messageMode || 'default-template',
+  };
 }
 
 async function buildNextRun(reference) {
@@ -130,19 +220,18 @@ async function buildNextRun(reference) {
     details.schedule.timezone,
   );
 
+  const manualEvent = sanitizeNextRunManualEvent(details.override);
+
   return {
     timestamp: details.targetMoment.toISOString(),
     formatted: adminLabel,
     adminLabel,
     publicLabel,
     timezone: details.schedule.timezone,
-    override: details.override
-      ? {
-          date: details.override.date,
-          time: details.override.time,
-          note: details.override.note,
-        }
-      : null,
+    source: manualEvent ? 'manual-announcement' : 'default-schedule',
+    manualEvent,
+    // Backward compatibility for older frontend/clients.
+    override: manualEvent,
   };
 }
 

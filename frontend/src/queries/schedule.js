@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../lib/apiClient';
 
 const ADMIN_SCHEDULE_KEY = ['schedule', 'admin'];
@@ -44,34 +44,43 @@ export function useUpdateSchedule() {
   });
 }
 
-export function useAddOverride() {
+export function useAddManualAnnouncement() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload) =>
-      apiRequest('/api/admin/schedule/overrides', {
+      apiRequest('/api/admin/schedule/announcements', {
         method: 'POST',
         body: payload,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ADMIN_SCHEDULE_KEY });
       queryClient.invalidateQueries({ queryKey: NEXT_RUN_KEY });
+      queryClient.invalidateQueries({ queryKey: PUBLIC_SCHEDULE_KEY });
     },
   });
 }
 
-export function useRemoveOverride() {
+export function useRemoveManualAnnouncement() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (date) =>
-      apiRequest(`/api/admin/schedule/overrides/${date}`, {
+    mutationFn: (identifier) =>
+      apiRequest(
+        `/api/admin/schedule/announcements/${encodeURIComponent(identifier)}`,
+        {
         method: 'DELETE',
-      }),
+        }
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ADMIN_SCHEDULE_KEY });
       queryClient.invalidateQueries({ queryKey: NEXT_RUN_KEY });
+      queryClient.invalidateQueries({ queryKey: PUBLIC_SCHEDULE_KEY });
     },
   });
 }
+
+// Backward-compatible hook names for existing imports.
+export const useAddOverride = useAddManualAnnouncement;
+export const useRemoveOverride = useRemoveManualAnnouncement;
 
 export function useAdminNextRun() {
   return useQuery({

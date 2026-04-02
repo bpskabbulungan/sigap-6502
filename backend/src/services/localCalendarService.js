@@ -1,16 +1,36 @@
 const fs = require('fs');
 const path = require('path');
+const moment = require('moment-timezone');
+const config = require('../config/env');
 const {
   normalizeAppDate,
   APP_DATE_REGEX,
   compareAppDates,
+  parseAppDate,
 } = require('../utils/dateFormatter');
 
 const STORAGE_PATH = path.join(__dirname, '..', '..', 'storage', 'calendar_local.json');
 const TEMPLATE_PATH = path.join(__dirname, '..', 'templates', 'calendar_local.json');
+const CALENDAR_RETENTION_DAYS = 7;
 
 let localCalendar = null;
 const listeners = new Set();
+let calendarWriteLocked = false;
+
+function withCalendarWriteLock(task) {
+  if (calendarWriteLocked) {
+    const error = new Error('Kalender lokal sedang diperbarui. Coba lagi.');
+    error.status = 503;
+    throw error;
+  }
+
+  calendarWriteLocked = true;
+  try {
+    return task();
+  } finally {
+    calendarWriteLocked = false;
+  }
+}
 
 function ensureStorageFile() {
   fs.mkdirSync(path.dirname(STORAGE_PATH), { recursive: true });
@@ -45,22 +65,85 @@ function normalizeCalendar(data = {}) {
   };
 }
 
+function createSnapshot(source = localCalendar) {
+  const safeSource = source || { LIBURAN: [], CUTI_BERSAMA: [] };
+  return {
+    LIBURAN: [...safeSource.LIBURAN],
+    CUTI_BERSAMA: [...safeSource.CUTI_BERSAMA],
+  };
+}
+
+function pruneExpiredCalendar(calendarData) {
+  const cutoff = moment
+    .tz(config.timezone)
+    .startOf('day')
+    .subtract(CALENDAR_RETENTION_DAYS, 'days');
+
+  const pruneList = (list) => {
+    const kept = [];
+    const removed = [];
+
+    list.forEach((date) => {
+      const parsed = parseAppDate(date, config.timezone);
+      if (!parsed) {
+        removed.push(date);
+        return;
+      }
+
+      if (parsed.isBefore(cutoff, 'day')) {
+        removed.push(date);
+        return;
+      }
+
+      kept.push(date);
+    });
+
+    return { kept, removed };
+  };
+
+  const liburan = pruneList(calendarData.LIBURAN);
+  const cutiBersama = pruneList(calendarData.CUTI_BERSAMA);
+
+  return {
+    calendar: {
+      LIBURAN: liburan.kept,
+      CUTI_BERSAMA: cutiBersama.kept,
+    },
+    removed: {
+      LIBURAN: liburan.removed,
+      CUTI_BERSAMA: cutiBersama.removed,
+    },
+    hasChanges: liburan.removed.length > 0 || cutiBersama.removed.length > 0,
+  };
+}
+
 function loadCalendarFromDisk() {
   ensureStorageFile();
 
   try {
     const raw = fs.readFileSync(STORAGE_PATH, 'utf-8');
     const parsed = JSON.parse(raw);
-    return normalizeCalendar(parsed);
+    const normalized = normalizeCalendar(parsed);
+    const { calendar: pruned, removed, hasChanges } = pruneExpiredCalendar(normalized);
+
+    if (hasChanges) {
+      fs.writeFileSync(STORAGE_PATH, JSON.stringify(pruned, null, 2));
+      console.log(
+        `[CalendarService] Auto-cleanup menghapus ${removed.LIBURAN.length} libur dan ${removed.CUTI_BERSAMA.length} cuti bersama (lebih dari ${CALENDAR_RETENTION_DAYS} hari lalu).`
+      );
+    }
+
+    return pruned;
   } catch (err) {
     console.error('[CalendarService] Gagal membaca calendar_local.json:', err.message);
     try {
       const fallback = fs.readFileSync(TEMPLATE_PATH, 'utf-8');
       const parsed = JSON.parse(fallback);
       const normalized = normalizeCalendar(parsed);
-      fs.writeFileSync(STORAGE_PATH, JSON.stringify(normalized, null, 2));
+      const { calendar: pruned } = pruneExpiredCalendar(normalized);
+      fs.writeFileSync(STORAGE_PATH, JSON.stringify(pruned, null, 2));
       console.log('[CalendarService] Storage diperbarui menggunakan template.');
-      return normalized;
+      return pruned;
     } catch (fallbackErr) {
       console.error('[CalendarService] Gagal memuat template kalender:', fallbackErr.message);
       return { LIBURAN: [], CUTI_BERSAMA: [] };
@@ -72,14 +155,23 @@ function getLocalCalendar() {
   if (!localCalendar) {
     localCalendar = loadCalendarFromDisk();
   }
-  return {
-    LIBURAN: [...localCalendar.LIBURAN],
-    CUTI_BERSAMA: [...localCalendar.CUTI_BERSAMA],
-  };
+
+  const { calendar: pruned, removed, hasChanges } = pruneExpiredCalendar(localCalendar);
+  if (hasChanges) {
+    withCalendarWriteLock(() => {
+      fs.writeFileSync(STORAGE_PATH, JSON.stringify(pruned, null, 2));
+      localCalendar = pruned;
+    });
+    console.log(
+      `[CalendarService] Auto-cleanup menghapus ${removed.LIBURAN.length} libur dan ${removed.CUTI_BERSAMA.length} cuti bersama (lebih dari ${CALENDAR_RETENTION_DAYS} hari lalu).`
+    );
+    notifyListeners(createSnapshot(pruned));
+  }
+
+  return createSnapshot();
 }
 
-function notifyListeners() {
-  const snapshot = getLocalCalendar();
+function notifyListeners(snapshot = createSnapshot()) {
   listeners.forEach((listener) => {
     try {
       listener(snapshot);
@@ -90,27 +182,38 @@ function notifyListeners() {
 }
 
 function setLocalCalendar(data) {
-  const normalized = normalizeCalendar(data);
-  try {
-    fs.writeFileSync(STORAGE_PATH, JSON.stringify(normalized, null, 2));
-    localCalendar = normalized;
-    notifyListeners();
-    return getLocalCalendar();
-  } catch (err) {
-    console.error('[CalendarService] Gagal menulis calendar_local.json:', err.message);
-    const error = new Error('Gagal menyimpan data kalender lokal.');
-    error.status = 500;
-    throw error;
-  }
+  return withCalendarWriteLock(() => {
+    const normalized = normalizeCalendar(data);
+    const { calendar: pruned, removed } = pruneExpiredCalendar(normalized);
+    try {
+      fs.writeFileSync(STORAGE_PATH, JSON.stringify(pruned, null, 2));
+      localCalendar = pruned;
+
+      if (removed.LIBURAN.length > 0 || removed.CUTI_BERSAMA.length > 0) {
+        console.log(
+          `[CalendarService] Auto-cleanup menghapus ${removed.LIBURAN.length} libur dan ${removed.CUTI_BERSAMA.length} cuti bersama (lebih dari ${CALENDAR_RETENTION_DAYS} hari lalu).`
+        );
+      }
+
+      const snapshot = createSnapshot(pruned);
+      notifyListeners(snapshot);
+      return snapshot;
+    } catch (err) {
+      console.error('[CalendarService] Gagal menulis calendar_local.json:', err.message);
+      const error = new Error('Gagal menyimpan data kalender lokal.');
+      error.status = 500;
+      throw error;
+    }
+  });
 }
 
 function onLocalCalendarChange(listener) {
-  listeners.add(listener);
   try {
     listener(getLocalCalendar());
   } catch (err) {
     console.error('[CalendarService] Listener gagal saat inisialisasi:', err.message);
   }
+  listeners.add(listener);
   return () => listeners.delete(listener);
 }
 

@@ -3,15 +3,34 @@ const path = require("path");
 const dotenv = require("dotenv");
 
 const projectRoot = path.resolve(__dirname, "..", "..");
-const envFilename =
-  process.env.NODE_ENV === "production" ? ".env.production" : ".env";
-const envPath = path.join(projectRoot, envFilename);
+const initialNodeEnv = process.env.NODE_ENV || "development";
+const envFilenames =
+  initialNodeEnv === "production"
+    ? [".env", ".env.production"]
+    : [".env", ".env.local"];
+const protectedEnvKeys = new Set(Object.keys(process.env));
 
-if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
-} else {
-  dotenv.config();
+function loadEnvFiles() {
+  for (const envFilename of envFilenames) {
+    const envPath = path.join(projectRoot, envFilename);
+    if (!fs.existsSync(envPath)) {
+      continue;
+    }
+
+    const parsed = dotenv.parse(fs.readFileSync(envPath));
+    Object.entries(parsed).forEach(([key, value]) => {
+      // Nilai dari shell/OS selalu menang, file env hanya untuk fallback/override internal.
+      if (protectedEnvKeys.has(key)) {
+        return;
+      }
+      process.env[key] = value;
+    });
+  }
 }
+
+loadEnvFiles();
+
+const nodeEnv = process.env.NODE_ENV || initialNodeEnv;
 
 const DEFAULT_SCHEDULE_VERSION = "2025-09-wita";
 
@@ -43,7 +62,7 @@ const parseOrigins = (raw) => {
 
 module.exports = {
   projectRoot,
-  nodeEnv: process.env.NODE_ENV || "development",
+  nodeEnv,
   // Default backend port aligns with Docker and frontend expectations
   port: parseInt(process.env.PORT || "3301", 10),
   timezone: process.env.TIMEZONE || process.env.TZ || "Asia/Makassar",

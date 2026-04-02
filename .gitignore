@@ -18,3 +18,15 @@ backend/storage/contacts.json
 .github/workflows/
 backend/config/*.json
 frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+
+# Local editor/OS artifacts
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+
+# Local scratch artifacts
+frontend/tmp/

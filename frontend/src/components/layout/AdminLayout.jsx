@@ -1,11 +1,12 @@
 import clsx from "clsx";
 import { Link, useLocation } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "../ui/Button";
 import { ThemeToggle } from "../ThemeToggle";
 import { Drawer } from "../ui/Drawer";
 import {
   Home,
+  Clock,
   Sliders,
   Users,
   Calendar as CalIcon,
@@ -17,6 +18,7 @@ import {
 import { useConfirm } from "../ui/ConfirmProvider.jsx";
 import { Skeleton } from "../ui/Skeleton";
 import { useDocumentTitle } from "../../utils/useDocumentTitle.js";
+import { AppFooter } from "./AppFooter";
 
 export function AdminLayout({
   username = "Admin",
@@ -30,16 +32,21 @@ export function AdminLayout({
   const { pathname } = useLocation();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [pathname]);
+
   useDocumentTitle(title, { defaultTitle: "SIGAP 6502 Admin" });
 
   const navItems = useMemo(
     () => [
       { to: "/admin/dashboard", label: "Dashboard", icon: Home },
-      { to: "/admin/overrides", label: "Override", icon: Sliders },
+      { to: "/admin/schedule", label: "Jadwal", icon: Clock },
+      { to: "/admin/announcements", label: "Pengumuman", icon: Sliders },
       { to: "/admin/contacts", label: "Kontak", icon: Users },
       { to: "/admin/holidays", label: "Kalender", icon: CalIcon },
-      { to: "/admin/templates", label: "Template", icon: FileText },
-      { to: "/admin/quotes", label: "Quotes", icon: MessageSquareText },
+      { to: "/admin/templates", label: "Templat", icon: FileText },
+      { to: "/admin/quotes", label: "Kutipan", icon: MessageSquareText },
     ],
     []
   );
@@ -50,15 +57,33 @@ export function AdminLayout({
     return (parts[0]?.[0] || "A").toUpperCase();
   }, [username]);
 
+  const handleLogout = async (onAfterConfirm) => {
+    const ok = await confirm({
+      title: "Keluar akun?",
+      message: "Anda akan keluar dari dashboard admin.",
+      confirmText: "Keluar",
+      variant: "danger",
+    });
+    if (!ok) return;
+    onAfterConfirm?.();
+    onLogout();
+  };
+
   const NavList = ({ onNavigate, variant = "full" }) => {
     const compact = variant === "rail";
+
     return (
-      <nav aria-label="Menu admin" className="not-prose">
-        <ul className="space-y-1">
+      <nav
+        aria-label="Menu admin"
+        className={clsx("not-prose", !compact && "px-1")}
+        data-ui-chrome="true"
+      >
+        <ul className={clsx(compact ? "space-y-1" : "space-y-0.5")}>
           {navItems.map((item) => {
             const { to, label } = item;
             const IconComponent = item.icon;
             const active = pathname.startsWith(to);
+
             return (
               <li key={to}>
                 <Link
@@ -67,37 +92,35 @@ export function AdminLayout({
                   aria-current={active ? "page" : undefined}
                   aria-label={label}
                   title={label}
+                  style={{ color: "hsl(var(--menu-ink))" }}
                   className={clsx(
-                    "group relative flex items-center rounded-xl py-2 text-sm font-medium transition focus:outline-none !no-underline",
+                    "group relative flex items-center rounded-lg text-sm font-medium !no-underline transition-[background-color,color] duration-200 focus:outline-none",
                     compact
-                      ? "justify-center lg:justify-start gap-2 px-2 lg:px-3"
-                      : "justify-start gap-3 px-3",
+                      ? "justify-center gap-2 px-2 py-2 lg:justify-start lg:px-3.5"
+                      : "justify-start gap-3 px-2.5 py-2.5",
                     active
-                      ? "bg-slate-900/5 !text-slate-900 ring-1 ring-slate-400/30 hover:bg-slate-900/10 visited:!text-slate-900"
-                      : "!text-slate-800 hover:bg-slate-900/5 hover:!text-slate-950 visited:!text-slate-800",
-                    "[.theme-dark_&]:data-[active=true]:bg-white/10 [.theme-dark_&]:data-[active=true]:!text-white [.theme-dark_&]:data-[active=true]:ring-1 [.theme-dark_&]:data-[active=true]:ring-white/20",
-                    "[.theme-dark_&]:!text-slate-300 [.theme-dark_&]:hover:bg-white/5 [.theme-dark_&]:hover:!text-white [.theme-dark_&]:visited:!text-slate-300",
-                    "focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 [.theme-dark_&]:focus-visible:ring-slate-500 [.theme-dark_&]:focus-visible:ring-offset-slate-900"
+                      ? "bg-muted/70 opacity-100"
+                      : "opacity-80 hover:bg-muted/55 hover:opacity-100",
+                    "focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   )}
-                  data-active={active || undefined}
                 >
-                  {/* indikator aktif di kiri */}
                   <span
                     aria-hidden
                     className={clsx(
-                      "absolute left-0 top-1/2 h-5 -translate-y-1/2 rounded-r-md transition-all",
-                      active
-                        ? "w-1.5 bg-slate-900 [.theme-dark_&]:bg-white"
-                        : "w-0"
+                      "absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full transition-opacity",
+                      active ? "opacity-100" : "opacity-0"
                     )}
+                    style={{ backgroundColor: "hsl(var(--menu-ink))" }}
                   />
                   <IconComponent
                     size={18}
-                    className={clsx("opacity-90", active && "opacity-100")}
+                    className={clsx(
+                      "shrink-0 transition-[opacity,color]",
+                      active ? "opacity-100" : "opacity-75 group-hover:opacity-100"
+                    )}
+                    style={{ color: "hsl(var(--menu-ink))" }}
                   />
-                  <span
-                    className={clsx(compact ? "hidden lg:inline" : "inline")}
-                  >
+                  <span className={clsx("truncate", compact ? "hidden lg:inline" : "inline")}>
                     {label}
                   </span>
                 </Link>
@@ -109,143 +132,200 @@ export function AdminLayout({
     );
   };
 
+  const SidebarFooter = ({ variant = "full", onNavigate }) => {
+    const compact = variant === "rail";
+
+    return (
+      <div className={clsx("space-y-3", !compact && "px-1")} data-ui-chrome="true">
+        {loading ? (
+          <>
+            <Skeleton
+              className={clsx(
+                "rounded-xl",
+                compact ? "mx-auto h-10 w-10 lg:h-10 lg:w-full" : "h-11 w-full"
+              )}
+              effect="shimmer"
+            />
+            <Skeleton
+              className={clsx(
+                "rounded-xl",
+                compact ? "mx-auto h-10 w-10 lg:h-10 lg:w-full" : "h-10 w-full"
+              )}
+              effect="shimmer"
+            />
+          </>
+        ) : (
+          <>
+            <div
+              className={clsx(
+                "flex items-center rounded-xl",
+                compact
+                  ? "justify-center px-2 py-2 lg:justify-start lg:gap-2 lg:px-3"
+                  : "w-full gap-2 border border-border/80 px-3 py-2.5",
+                compact
+                  ? "border border-border/80 bg-muted/30"
+                  : "bg-transparent"
+              )}
+            >
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                {initials}
+              </span>
+              <span
+                className={clsx(
+                  "truncate text-sm",
+                  compact ? "hidden text-muted-foreground lg:inline" : "inline text-[hsl(var(--menu-ink))]"
+                )}
+                title={username}
+              >
+                {username}
+              </span>
+            </div>
+
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => handleLogout(onNavigate)}
+              disabled={isLoggingOut}
+              className={clsx(
+                compact
+                  ? "w-full justify-center gap-2 px-2 lg:px-3"
+                  : "w-full justify-center gap-2",
+                "border-[hsl(var(--destructive)/0.75)] bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))] hover:bg-[hsl(var(--destructive)/0.9)]"
+              )}
+            >
+              <span className={clsx(compact ? "hidden lg:inline" : "inline")}>
+                {isLoggingOut ? "Keluar..." : "Keluar"}
+              </span>
+              <LogOut size={16} />
+            </Button>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const SidebarContent = ({ variant = "full", onNavigate }) => {
+    const compact = variant === "rail";
+
+    return (
+      <div className={clsx("flex h-full min-h-0 flex-col", compact ? "" : "gap-4")}>
+        <div className={clsx("min-h-0 flex-1 overflow-y-auto", compact ? "pr-1" : "pr-0")}>
+          <NavList variant={variant} onNavigate={onNavigate} />
+        </div>
+        <div
+          className={clsx(
+            "border-border/80",
+            compact ? "mt-4 border-t pt-3" : "mt-1 border-t border-border/60 pt-4"
+          )}
+        >
+          <SidebarFooter variant={variant} onNavigate={onNavigate} />
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-slate-50 text-slate-900 [.theme-dark_&]:bg-slate-950 [.theme-dark_&]:text-slate-100">
-      {/* Skip link */}
+    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background text-foreground">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:rounded-lg focus:px-3 focus:py-1.5
-                   focus:bg-slate-900 focus:text-white
-                   [.theme-dark_&]:focus:bg-white [.theme-dark_&]:focus:text-slate-900"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:rounded-lg focus:bg-primary focus:px-3 focus:py-1.5 focus:text-primary-foreground"
       >
         Loncat ke konten
       </a>
 
-      {/* Background accents */}
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_50%_at_20%_10%,rgba(100,116,139,0.18),transparent_60%)] [.theme-dark_&]:bg-[radial-gradient(60%_50%_at_20%_10%,rgba(255,255,255,0.18),transparent_55%)]" />
-      <div className="pointer-events-none absolute inset-x-0 top-[12%] -z-10 h-72 bg-gradient-to-r from-slate-400/20 via-slate-500/15 to-slate-400/20 blur-3xl [.theme-dark_&]:from-white/15 [.theme-dark_&]:via-white/10 [.theme-dark_&]:to-white/15" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-[radial-gradient(65%_60%_at_20%_0%,hsl(var(--primary)/0.12),transparent_70%)]" />
 
-      {/* Topbar: FIXED */}
-      <header className="fixed inset-x-0 top-0 z-50 h-14 md:h-16 not-prose border-b border-slate-200/60 bg-white/80 backdrop-blur supports-[backdrop-filter]:backdrop-blur-md shadow-sm shadow-slate-900/5 [.theme-dark_&]:border-white/10 [.theme-dark_&]:bg-slate-950/80 [.theme-dark_&]:shadow-slate-900/20">
-        <nav className="mx-auto flex h-full max-w-7xl items-center justify-between gap-3 px-4 not-prose">
-          <div className="flex items-center gap-2">
+      <Drawer
+        open={mobileSidebarOpen}
+        onClose={() => setMobileSidebarOpen(false)}
+        title="SIGAP 6502"
+        side="left"
+        size="md"
+        closeText="X"
+        closeAriaLabel="Tutup menu"
+        closeAsIcon
+        closeButtonClassName="text-[hsl(var(--menu-ink))]"
+        panelClassName="rounded-r-2xl border-r border-border/70 bg-card shadow-xl"
+        backdropClassName="bg-black/45"
+      >
+        <SidebarContent
+          variant="full"
+          onNavigate={() => setMobileSidebarOpen(false)}
+        />
+      </Drawer>
+
+      <header
+        className="fixed inset-x-0 top-0 z-50 h-14 border-b border-border/80 bg-[hsl(var(--background))] shadow-sm md:h-16"
+        data-ui-chrome="true"
+      >
+        <nav className="flex h-full w-full items-center justify-between gap-3 px-4 not-prose md:px-5 lg:px-0">
+          <div className="flex min-w-0 items-center gap-2 lg:h-full lg:w-[220px] lg:border-r lg:border-border/85 lg:bg-[hsl(var(--card))] lg:px-4">
             <button
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300/60 bg-white/60 text-slate-700 hover:bg-white/80 md:hidden [.theme-dark_&]:border-white/10 [.theme-dark_&]:bg-slate-900/60 [.theme-dark_&]:text-slate-200 [.theme-dark_&]:hover:bg-slate-900/80"
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:bg-muted md:hidden"
               onClick={() => setMobileSidebarOpen(true)}
               aria-label="Buka menu"
             >
               <Menu size={18} />
             </button>
+
             <Link
               to="/"
-              className="flex items-center text-lg font-semibold tracking-tight !text-slate-900 hover:opacity-90 no-underline visited:!text-slate-900 [.theme-dark_&]:!text-white [.theme-dark_&]:visited:!text-white"
+              className="flex items-center gap-2 text-lg font-semibold tracking-tight text-[hsl(var(--menu-ink))] no-underline hover:opacity-90"
             >
-              <img
-                src="/logo.png"
-                alt="SIGAP"
-                className="mr-2 h-6 w-6 rounded"
-              />
-              <span>SIGAP 6502</span>
+              <img src="/logo.png" alt="SIGAP" className="h-6 w-6 rounded" />
+              <span className="leading-none">SIGAP 6502</span>
             </Link>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 lg:pr-6">
             {loading ? (
               <>
-                <Skeleton
-                  className="hidden h-9 w-28 rounded-xl sm:block"
-                  effect="shimmer"
-                />
-                <Skeleton
-                  className="h-9 w-24 rounded-xl sm:hidden"
-                  effect="shimmer"
-                />
+                <Skeleton className="hidden h-9 w-28 rounded-xl sm:block" effect="shimmer" />
+                <Skeleton className="h-9 w-24 rounded-xl sm:hidden" effect="shimmer" />
               </>
             ) : (
-              <span className="hidden items-center gap-2 rounded-full border border-slate-200/70 bg-white/60 px-2.5 py-1.5 text-sm text-slate-700 sm:inline-flex [.theme-dark_&]:border-white/10 [.theme-dark_&]:bg-white/5 [.theme-dark_&]:text-slate-200">
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-slate-900 text-[11px] font-bold text-white [.theme-dark_&]:bg-white [.theme-dark_&]:text-slate-900">
+              <span className="hidden items-center gap-2 rounded-full border border-border bg-card px-2.5 py-1.5 text-sm text-muted-foreground sm:inline-flex">
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
                   {initials}
                 </span>
-                <span className="truncate max-w-[12ch]" title={username}>
+                <span className="max-w-[12ch] truncate" title={username}>
                   {username}
                 </span>
               </span>
             )}
 
-            <ThemeToggle className="h-9" />
-
-            {loading ? (
-              <Skeleton className="h-9 w-24 rounded-xl" effect="shimmer" />
-            ) : (
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={async () => {
-                  const ok = await confirm({
-                    title: "Keluar akun?",
-                    message: "Anda akan keluar dari dashboard admin.",
-                    confirmText: "Keluar",
-                    variant: "danger",
-                  });
-                  if (ok) onLogout();
-                }}
-                disabled={isLoggingOut}
-                className="h-9"
-              >
-                {isLoggingOut ? "Keluar..." : "Keluar"}
-                <LogOut size={16} />
-              </Button>
-            )}
+            <ThemeToggle className="h-10" />
           </div>
         </nav>
       </header>
 
-      {/* Shell with sidebar (offset header) */}
-      <div className="pt-14 md:pt-16">
-        {/* lg: satu kolom + padding kiri 200px untuk ruang sidebar fixed */}
-        <div className="mx-auto grid w-full max-w-7xl grid-cols-1 md:grid-cols-[64px_minmax(0,1fr)] lg:grid-cols-1 lg:pl-[200px]">
-          {/* Sidebar: md=rail sticky, lg=fixed (selalu nempel) */}
+      <div className="flex-1 pt-14 md:pt-16">
+        <div className="grid w-full grid-cols-1 md:grid-cols-[72px_minmax(0,1fr)] lg:grid-cols-1 lg:pl-[220px]">
           <aside
             className={clsx(
-              // sembunyikan di <md>
-              "hidden md:block not-prose",
-              // lg: fixed 200px, penuh tinggi viewport minus header
-              "lg:fixed lg:left-0 lg:top-16 lg:z-40 lg:h-[calc(100vh-64px)] lg:w-[200px]"
+              "hidden bg-[hsl(var(--card))] md:block not-prose",
+              "lg:fixed lg:left-0 lg:top-16 lg:z-40 lg:h-[calc(100vh-64px)] lg:w-[220px]"
             )}
             aria-label="Sidebar admin"
+            data-ui-chrome="true"
           >
-            {/* md: wrapper sticky di bawah header */}
-            <div className="md:sticky md:top-16 lg:static">
-              <div className="border-r border-slate-200/60 bg-white/50 px-2 py-4 lg:px-3 [.theme-dark_&]:border-white/10 [.theme-dark_&]:bg-slate-950/60 h-full">
-                {/* md: scroll area berdasarkan viewport; lg: penuh & scrollable */}
-                <div className="md:max-h-[calc(100vh-64px)] md:overflow-y-auto lg:h-full lg:max-h-none lg:overflow-y-auto pr-1">
-                  <NavList variant="rail" />
+            <div className="h-full md:sticky md:top-16 lg:static">
+              <div className="md:h-[calc(100vh-64px)] lg:h-full border-r border-border/85 bg-[hsl(var(--card))] px-2 py-4 lg:px-3 lg:py-5">
+                <div className="h-full">
+                  <SidebarContent variant="rail" />
                 </div>
               </div>
             </div>
           </aside>
 
-          {/* Main content */}
           <main id="main" className="relative z-10 px-4 py-8 sm:py-12 md:py-16">
             {children}
             <div className="h-[env(safe-area-inset-bottom,0)]" />
           </main>
         </div>
       </div>
-
-      {/* Mobile Drawer Sidebar: ikon + label */}
-      <Drawer
-        open={mobileSidebarOpen}
-        onClose={() => setMobileSidebarOpen(false)}
-        side="left"
-        title="Menu Admin"
-        size="sm"
-      >
-        <NavList
-          variant="full"
-          onNavigate={() => setMobileSidebarOpen(false)}
-        />
-      </Drawer>
+      <AppFooter className="md:pl-[72px] lg:pl-[220px]" />
     </div>
   );
 }

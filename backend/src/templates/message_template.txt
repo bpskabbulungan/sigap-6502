@@ -1,20 +1,22 @@
-Halo, selamat sore {name}!
+Halo, selamat sore {name}! 😊
 
 Sebelum meninggalkan kantor hari ini, mohon pastikan Anda telah melakukan hal-hal berikut:
 
 ✅ Absen Pulang 🏷️
-Pastikan Anda sudah melakukan absen pulang. Jangan sampai terlewat ya! 
+Pastikan Anda sudah melakukan absen pulang agar tidak terlewat.
 
-📝 Isi Matriks Harian 🎯
-Jangan lupa mengisi aktivitas atau progress pekerjaan hari ini melalui tautan berikut:  
+📝 Isi Matriks Kegiatan🎯
+Jangan lupa untuk mengisi aktivitas atau progres pekerjaan hari ini melalui tautan berikut:
 https://semakin.databenuanta.id/
 
 ⚡ Periksa Perangkat Elektronik 💡🔌
-Matikan komputer, lampu, dan semua perangkat elektronik lainnya untuk menghemat energi dan menjaga keamanan. 
+Pastikan komputer, lampu, dan seluruh perangkat elektronik lainnya sudah dimatikan untuk menghemat energi serta menjaga keamanan.
 
 > _"{quote}"_
 
-Terima kasih atas dedikasi dan kerja keras Anda hari ini. Sampai jumpa besok dengan semangat yang baru! 💪😄
+Terima kasih atas kerja keras hari ini! 🙌
+Semoga harimu menyenangkan, dan sampai jumpa besok dengan semangat baru! 💪😄
 
----  
+---
+
 🤖 Dikirim oleh SIGAP 🤖
