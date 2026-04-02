@@ -24,14 +24,19 @@ router.get('/health', (req, res) => {
   });
 });
 
-router.get('/logs', requireAdmin, (req, res) => {
+router.get('/logs', (req, res) => {
   const limit = Number.parseInt(req.query.limit, 10) || 100;
-  const audience =
+  const requestedAudience =
     req.query.audience === LOG_AUDIENCES.ADMIN
       ? LOG_AUDIENCES.ADMIN
       : LOG_AUDIENCES.PUBLIC;
+  const isAdmin = Boolean(req.session?.isAdmin);
 
-  res.json({ logs: getLogs(limit, audience) });
+  if (requestedAudience === LOG_AUDIENCES.ADMIN && !isAdmin) {
+    return res.status(401).json({ message: 'Login admin diperlukan untuk mengakses log admin.' });
+  }
+
+  return res.json({ logs: getLogs(limit, requestedAudience) });
 });
 
 router.get('/bot/status', (req, res) => {
@@ -79,7 +84,7 @@ router.get('/keepalive', requireAdmin, (req, res) => {
   res.json({ status: 'alive', timestamp: nowIso, formattedTimestamp: nowLabel });
 });
 
-router.get('/stats', requireAdmin, async (req, res, next) => {
+router.get('/stats', async (req, res, next) => {
   const logsDir = path.join(__dirname, '..', '..', 'logs');
   try {
     await fs.promises.mkdir(logsDir, { recursive: true });

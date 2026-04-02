@@ -15,12 +15,57 @@ setupTestEnv();
 
 const { createApp, buildAllowedOrigins } = require('../src/app');
 const config = require('../src/config/env');
+const { addLog, LOG_AUDIENCES } = require('../src/controllers/logController');
 
 test('CORS allowed origins exclude wildcard by default', () => {
   const allowed = buildAllowedOrigins();
   assert.ok(!allowed.has('*'), 'Allowed origins should not include wildcard');
   assert.ok(allowed.has(new URL(config.webAppUrl).origin), 'Default webAppUrl should be allowed for CORS');
   assert.ok(allowed.has('http://127.0.0.1:5174'), '127.0.0.1 alias should be allowed for localhost webAppUrl');
+});
+
+test('public system endpoints can be accessed without admin login', async () => {
+  const app = createApp();
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const marker = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const publicLine = `[Test Public] marker ${marker}`;
+  const adminLine = `[Test Admin] marker ${marker}`;
+
+  addLog(publicLine, { audience: LOG_AUDIENCES.PUBLIC, skipPersist: true });
+  addLog(adminLine, { audience: LOG_AUDIENCES.ADMIN, skipPersist: true });
+
+  try {
+    const publicLogsResponse = await fetch(
+      `${baseUrl}/api/system/logs?limit=100&audience=${LOG_AUDIENCES.PUBLIC}`
+    );
+    assert.equal(publicLogsResponse.status, 200);
+
+    const publicLogsBody = await publicLogsResponse.json();
+    assert.ok(Array.isArray(publicLogsBody.logs), 'Public logs payload should contain logs array');
+    assert.ok(publicLogsBody.logs.some((line) => line.includes(publicLine)));
+    assert.ok(!publicLogsBody.logs.some((line) => line.includes(adminLine)));
+
+    const adminLogsResponse = await fetch(
+      `${baseUrl}/api/system/logs?limit=100&audience=${LOG_AUDIENCES.ADMIN}`
+    );
+    assert.equal(adminLogsResponse.status, 401);
+
+    const adminLogsBody = await adminLogsResponse.json();
+    assert.match(adminLogsBody.message, /login admin/i);
+
+    const statsResponse = await fetch(`${baseUrl}/api/system/stats`);
+    assert.equal(statsResponse.status, 200);
+
+    const statsBody = await statsResponse.json();
+    assert.ok(statsBody && typeof statsBody === 'object');
+    assert.ok(statsBody.messagesPerDay && typeof statsBody.messagesPerDay === 'object');
+    assert.ok(statsBody.errorsPerDay && typeof statsBody.errorsPerDay === 'object');
+    assert.ok(statsBody.uptimePerDay && typeof statsBody.uptimePerDay === 'object');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test('schedule API rejects invalid timezone with HTTP 400 and accepts Asia/Makassar', async () => {
