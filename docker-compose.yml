@@ -27,6 +27,13 @@ services:
     environment:
       BACKEND_HOST: ${FRONTEND_BACKEND_HOST:-backend}
       BACKEND_PORT: ${FRONTEND_BACKEND_PORT:-3301}
+    networks:
+      - default
+      - cf-tunnel
     ports:
       - "3302:80"
     restart: unless-stopped
+
+networks:
+  cf-tunnel:
+    external: true
