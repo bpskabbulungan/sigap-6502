@@ -34,8 +34,8 @@ const TIMEZONE_LABELS = {
 
 const MONITORING_ITEMS = [
   "Status koneksi dan kesiapan bot",
+  "Log dan statistik aktivitas",
   "Jadwal pengiriman otomatis harian",
-  "Pengumuman dan log aktivitas",
 ];
 
 function uppercaseFirst(value) {
@@ -469,7 +469,9 @@ export default function PublicStatusPage() {
                       return (
                         <div key={day} className="space-y-1.5">
                           <div className="flex flex-wrap items-start justify-between gap-1.5 text-[11px] text-muted-foreground sm:flex-nowrap sm:items-center sm:gap-3 sm:text-xs">
-                            <span className="font-medium">{day}</span>
+                            <span className="font-medium">
+                              {formatAppDate(day, { withWeekday: true })}
+                            </span>
                             <span className="w-full break-words text-left sm:w-auto sm:text-right">
                               {formatStatCount(totalMessagesPerDay)} pesan,{" "}
                               {formatStatCount(totalErrorsPerDay)} error
