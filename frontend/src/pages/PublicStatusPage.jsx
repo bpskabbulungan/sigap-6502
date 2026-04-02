@@ -47,6 +47,25 @@ function getPart(parts, partType, fallback = "") {
   return parts.find((part) => part.type === partType)?.value ?? fallback;
 }
 
+function formatUptimeHours(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return "0";
+
+  return new Intl.NumberFormat("id-ID", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(numericValue);
+}
+
+function formatStatCount(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return "0";
+
+  return new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 0,
+  }).format(numericValue);
+}
+
 function formatNextRunDisplay(nextRun) {
   if (!nextRun?.timestamp) return null;
 
@@ -404,24 +423,33 @@ export default function PublicStatusPage() {
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Pesan
                       </p>
-                      <p className="mt-1 text-xl font-semibold text-foreground">
-                        {statsSummary.totalMessages}
+                      <p
+                        className="mt-1 break-all text-lg font-semibold leading-tight text-foreground sm:text-xl"
+                        title={`${statsSummary.totalMessages}`}
+                      >
+                        {formatStatCount(statsSummary.totalMessages)}
                       </p>
                     </div>
                     <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Error
                       </p>
-                      <p className="mt-1 text-xl font-semibold text-foreground">
-                        {statsSummary.totalErrors}
+                      <p
+                        className="mt-1 break-all text-lg font-semibold leading-tight text-foreground sm:text-xl"
+                        title={`${statsSummary.totalErrors}`}
+                      >
+                        {formatStatCount(statsSummary.totalErrors)}
                       </p>
                     </div>
                     <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Uptime (jam)
                       </p>
-                      <p className="mt-1 text-xl font-semibold text-foreground">
-                        {statsSummary.totalUptime}
+                      <p
+                        className="mt-1 break-all text-lg font-semibold leading-tight text-foreground sm:text-xl"
+                        title={`${statsSummary.totalUptime}`}
+                      >
+                        {formatUptimeHours(statsSummary.totalUptime)}
                       </p>
                     </div>
                   </div>
@@ -440,10 +468,11 @@ export default function PublicStatusPage() {
 
                       return (
                         <div key={day} className="space-y-1.5">
-                          <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground sm:text-xs">
-                            <span>{day}</span>
-                            <span>
-                              {totalMessagesPerDay} pesan, {totalErrorsPerDay} error
+                          <div className="flex flex-wrap items-start justify-between gap-1.5 text-[11px] text-muted-foreground sm:flex-nowrap sm:items-center sm:gap-3 sm:text-xs">
+                            <span className="font-medium">{day}</span>
+                            <span className="w-full break-words text-left sm:w-auto sm:text-right">
+                              {formatStatCount(totalMessagesPerDay)} pesan,{" "}
+                              {formatStatCount(totalErrorsPerDay)} error
                             </span>
                           </div>
                           <div className="h-2 overflow-hidden rounded-full bg-muted">
