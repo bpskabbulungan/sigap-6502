@@ -7,11 +7,13 @@ SIGAP 6502 adalah aplikasi monitoring dan administrasi pengingat presensi berbas
 SIGAP 6502 dibangun sebagai monorepo `backend` + `frontend` untuk kebutuhan operasional pengingat presensi harian.
 
 Aplikasi ini ditujukan untuk:
+
 - Admin operasional yang mengelola jadwal, kontak, dan konten pesan.
 - Tim internal yang membutuhkan visibilitas status layanan secara real-time.
 - Pengguna publik internal yang perlu melihat status layanan tanpa login.
 
 Nilai utama yang diberikan:
+
 - Kontrol operasional terpusat dari satu dashboard admin.
 - Monitoring bot dan jadwal yang transparan.
 - Manajemen data pengingat (kontak, kalender, template, kutipan) yang rapi dan terstruktur.
@@ -31,73 +33,73 @@ Nilai utama yang diberikan:
 ## Preview Aplikasi
 
 ### Dashboard
+
 - Light Mode
 
   ![Dashboard Light](./docs/images/dashboard-light.png)
-
 - Dark Mode
 
   ![Dashboard Dark](./docs/images/dashboard-dark.png)
 
 ### Login
+
 - Light Mode
 
   ![Login Light](./docs/images/login-light.png)
-
 - Dark Mode
 
   ![Login Dark](./docs/images/login-dark.png)
 
 ### Kalender
+
 - Light Mode
 
   ![Kalender Light](./docs/images/kalender-light.png)
-
 - Dark Mode
 
   ![Kalender Dark](./docs/images/kalender-dark.png)
 
 ### Kontak
+
 - Light Mode
 
   ![Kontak Light](./docs/images/kontak-light.png)
-
 - Dark Mode
 
   ![Kontak Dark](./docs/images/kontak-dark.png)
 
 ### Templat
+
 - Light Mode
 
   ![Templat Light](./docs/images/templat-light.png)
-
 - Dark Mode
 
   ![Templat Dark](./docs/images/templat-dark.png)
 
 ### Kutipan
+
 - Light Mode
 
   ![Kutipan Light](./docs/images/kutipan-light.png)
-
 - Dark Mode
 
   ![Kutipan Dark](./docs/images/kutipan-dark.png)
 
 ### Public Home
+
 - Light Mode
 
   ![Public Home Light](./docs/images/public-home-light.png)
-
 - Dark Mode
 
   ![Public Home Dark](./docs/images/public-home-dark.png)
 
 ### Error Pages
+
 - Error 404
 
   ![Error 404](./docs/images/error-404.png)
-
 - Error 500
 
   ![Error 500](./docs/images/error-500.png)
@@ -106,22 +108,22 @@ Nilai utama yang diberikan:
 
 Aplikasi mendukung dua mode tampilan (`light` dan `dark`) dengan komponen UI yang konsisten di seluruh halaman publik dan admin. Perpindahan tema tersedia melalui `ThemeToggle` dan preferensi tema disimpan di browser.
 
-| Light Mode | Dark Mode |
-| --- | --- |
-| ![Dashboard Light](./docs/images/dashboard-light.png) | ![Dashboard Dark](./docs/images/dashboard-dark.png) |
+| Light Mode                                              | Dark Mode                                             |
+| ------------------------------------------------------- | ----------------------------------------------------- |
+| ![Dashboard Light](./docs/images/dashboard-light.png)     | ![Dashboard Dark](./docs/images/dashboard-dark.png)     |
 | ![Public Home Light](./docs/images/public-home-light.png) | ![Public Home Dark](./docs/images/public-home-dark.png) |
 
 ## Menu Aplikasi
 
-| Menu | Fungsi | Apa yang Bisa Dilakukan User |
-| --- | --- | --- |
-| Dashboard (`/admin/dashboard`) | Pusat monitoring operasional | Memantau status bot, melihat metrik jadwal, membuka log aktivitas, mengecek pengiriman berikutnya, dan menjalankan kontrol bot. |
-| Kontak (`/admin/contacts`) | Manajemen penerima pengingat WhatsApp | Menambah, mengubah, menghapus kontak, mencari data, mengubah status kontak, serta menjalankan aksi massal. |
-| Kalender (`/admin/holidays`) | Manajemen tanggal khusus | Menandai hari libur nasional dan cuti bersama, melihat agenda per bulan, serta menghapus event kalender. |
-| Templat (`/admin/templates`) | Manajemen isi pesan utama | Mengedit template pesan, menyisipkan placeholder `{name}` dan `{quote}`, melihat pratinjau, menyalin hasil, dan menyimpan perubahan. |
-| Kutipan (`/admin/quotes`) | Manajemen daftar kutipan harian | Menambah, mengedit, menghapus kutipan, mencari kutipan, dan memantau batas karakter konten. |
-| Login (`/admin/login`) | Gerbang autentikasi admin | Masuk ke area admin dengan kredensial yang valid dan redirect otomatis ke halaman admin yang dituju. |
-| Public Page (`/`) | Transparansi status layanan | Melihat status bot, ringkasan operasional, log aktivitas publik, statistik 7 hari, dan jadwal pengiriman default. |
+| Menu                             | Fungsi                                | Apa yang Bisa Dilakukan User                                                                                                             |
+| -------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard (`/admin/dashboard`) | Pusat monitoring operasional          | Memantau status bot, melihat metrik jadwal, membuka log aktivitas, mengecek pengiriman berikutnya, dan menjalankan kontrol bot.          |
+| Kontak (`/admin/contacts`)     | Manajemen penerima pengingat WhatsApp | Menambah, mengubah, menghapus kontak, mencari data, mengubah status kontak, serta menjalankan aksi massal.                               |
+| Kalender (`/admin/holidays`)   | Manajemen tanggal khusus              | Menandai hari libur nasional dan cuti bersama, melihat agenda per bulan, serta menghapus event kalender.                                 |
+| Templat (`/admin/templates`)   | Manajemen isi pesan utama             | Mengedit template pesan, menyisipkan placeholder `{name}` dan `{quote}`, melihat pratinjau, menyalin hasil, dan menyimpan perubahan. |
+| Kutipan (`/admin/quotes`)      | Manajemen daftar kutipan harian       | Menambah, mengedit, menghapus kutipan, mencari kutipan, dan memantau batas karakter konten.                                              |
+| Login (`/admin/login`)         | Gerbang autentikasi admin             | Masuk ke area admin dengan kredensial yang valid dan redirect otomatis ke halaman admin yang dituju.                                     |
+| Public Page (`/`)              | Transparansi status layanan           | Melihat status bot, ringkasan operasional, log aktivitas publik, statistik 7 hari, dan jadwal pengiriman default.                        |
 
 ## Installation
 
@@ -172,6 +174,7 @@ npm run dev
 ```
 
 Akses aplikasi:
+
 - Backend API: `http://localhost:3301`
 - Frontend: `http://localhost:5174`
 
@@ -194,6 +197,7 @@ npm --workspace frontend run preview -- --host 0.0.0.0 --port 4173
 ```
 
 Akses hasil start:
+
 - Backend: `http://localhost:3301`
 - Frontend preview: `http://localhost:4173`
 
@@ -201,38 +205,38 @@ Akses hasil start:
 
 ### Root workspace (`package.json`)
 
-| Script | Keterangan |
-| --- | --- |
-| `npm run dev` | Menjalankan backend dan frontend bersamaan. |
-| `npm run dev:backend` | Menjalankan backend saja (nodemon). |
-| `npm run dev:frontend` | Menjalankan frontend saja (Vite dev server). |
-| `npm run build` | Build backend + frontend workspace. |
-| `npm run test` | Menjalankan test backend + frontend. |
-| `npm run lint` | Menjalankan lint backend + frontend. |
-| `npm run check:lf` | Validasi line ending script shell. |
-| `npm run postinstall` | Menjalankan `patch-package` setelah instalasi. |
+| Script                   | Keterangan                                       |
+| ------------------------ | ------------------------------------------------ |
+| `npm run dev`          | Menjalankan backend dan frontend bersamaan.      |
+| `npm run dev:backend`  | Menjalankan backend saja (nodemon).              |
+| `npm run dev:frontend` | Menjalankan frontend saja (Vite dev server).     |
+| `npm run build`        | Build backend + frontend workspace.              |
+| `npm run test`         | Menjalankan test backend + frontend.             |
+| `npm run lint`         | Menjalankan lint backend + frontend.             |
+| `npm run check:lf`     | Validasi line ending script shell.               |
+| `npm run postinstall`  | Menjalankan `patch-package` setelah instalasi. |
 
 ### Backend (`backend/package.json`)
 
-| Script | Keterangan |
-| --- | --- |
+| Script                                | Keterangan                                                    |
+| ------------------------------------- | ------------------------------------------------------------- |
 | `npm --workspace backend run start` | Menjalankan backend production mode (`node src/server.js`). |
-| `npm --workspace backend run dev` | Menjalankan backend development mode (`nodemon`). |
-| `npm --workspace backend run build` | Placeholder build backend. |
-| `npm --workspace backend run lint` | Lint source backend. |
-| `npm --workspace backend run test` | Test backend. |
+| `npm --workspace backend run dev`   | Menjalankan backend development mode (`nodemon`).           |
+| `npm --workspace backend run build` | Placeholder build backend.                                    |
+| `npm --workspace backend run lint`  | Lint source backend.                                          |
+| `npm --workspace backend run test`  | Test backend.                                                 |
 
 ### Frontend (`frontend/package.json`)
 
-| Script | Keterangan |
-| --- | --- |
-| `npm --workspace frontend run dev` | Menjalankan frontend development mode. |
-| `npm --workspace frontend run build` | Build frontend production bundle. |
-| `npm --workspace frontend run preview` | Menjalankan preview build frontend. |
-| `npm --workspace frontend run lint` | Lint source frontend. |
-| `npm --workspace frontend run test` | Test frontend. |
-| `npm --workspace frontend run test:visual` | Menjalankan visual test Playwright. |
-| `npm --workspace frontend run test:visual:update` | Update snapshot visual test. |
+| Script                                              | Keterangan                             |
+| --------------------------------------------------- | -------------------------------------- |
+| `npm --workspace frontend run dev`                | Menjalankan frontend development mode. |
+| `npm --workspace frontend run build`              | Build frontend production bundle.      |
+| `npm --workspace frontend run preview`            | Menjalankan preview build frontend.    |
+| `npm --workspace frontend run lint`               | Lint source frontend.                  |
+| `npm --workspace frontend run test`               | Test frontend.                         |
+| `npm --workspace frontend run test:visual`        | Menjalankan visual test Playwright.    |
+| `npm --workspace frontend run test:visual:update` | Update snapshot visual test.           |
 
 ## Struktur Project
 
@@ -253,37 +257,6 @@ sigap-6502/
 |- README.md
 ```
 
-Padanan struktur inti yang dipakai di dokumentasi ini:
-- `app/` -> `frontend/src/pages/`
-- `components/` -> `frontend/src/components/`
-- `lib/` -> `frontend/src/lib/`
-- `hooks/` -> `frontend/src/queries/` dan `frontend/src/utils/`
-- `public/` -> `frontend/public/`
-- `docs/images/` -> aset screenshot untuk README
+## Kredit
 
-## Daftar Screenshot yang Dibutuhkan
-
-Simpan semua file berikut di `docs/images/`:
-
-- `dashboard-light.png`
-- `dashboard-dark.png`
-- `login-light.png`
-- `login-dark.png`
-- `kalender-light.png`
-- `kalender-dark.png`
-- `kontak-light.png`
-- `kontak-dark.png`
-- `templat-light.png`
-- `templat-dark.png`
-- `kutipan-light.png`
-- `kutipan-dark.png`
-- `public-home-light.png`
-- `public-home-dark.png`
-- `error-404.png`
-- `error-500.png`
-
-## Catatan Pengisian Manual
-
-- Screenshot README sudah tersedia di `docs/images/` sesuai daftar file.
-- Jika URL repository berbeda, perbarui perintah `git clone` pada bagian Installation.
-- Untuk deployment nyata, ganti semua nilai kredensial default (`ADMIN_PASSWORD`, `SESSION_SECRET`, `CONTROL_API_KEY`) dengan nilai aman.
+Semoga dokumentasi ini membantu. Jika ingin melakukan replikasi, kolaborasi, atau ada pertanyaan, silakan menghubungi tim IPDS BPS Kabupaten Bulungan.
