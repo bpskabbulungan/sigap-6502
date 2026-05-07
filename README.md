@@ -201,6 +201,48 @@ Akses hasil start:
 - Backend: `http://localhost:3301`
 - Frontend preview: `http://localhost:4173`
 
+## Deploy via GitHub Build (Tanpa Build di Server)
+
+Project ini sudah menyiapkan workflow GitHub Actions:
+
+- File workflow: `.github/workflows/docker-build-push.yml`
+- Trigger: push ke branch `main` atau manual `workflow_dispatch`
+- Output image:
+  - `ghcr.io/<owner>/sigap-6502-backend:latest`
+  - `ghcr.io/<owner>/sigap-6502-frontend:latest`
+
+### Persiapan 1x di server
+
+1. Login ke GHCR (gunakan GitHub PAT dengan scope `read:packages`):
+
+```bash
+echo "<GITHUB_PAT>" | docker login ghcr.io -u <github-username> --password-stdin
+```
+
+2. Pastikan file env backend tersedia:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+### Deploy/update rutin di server
+
+Jalankan dari root project:
+
+```bash
+git pull
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Dengan alur ini server tidak lagi menjalankan proses `docker build`; server hanya menarik image hasil build dari GitHub.
+
+Jika ingin pin ke build tertentu (bukan `latest`), pakai tag SHA image:
+
+```bash
+IMAGE_TAG=sha-<commit-sha-short> docker compose -f docker-compose.prod.yml up -d
+```
+
 ## Scripts
 
 ### Root workspace (`package.json`)

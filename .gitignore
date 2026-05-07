@@ -16,6 +16,9 @@ backend/storage/contacts.json
 .wwebjs_cache/
 .github/
 .github/workflows/
+!.github/
+!.github/workflows/
+!.github/workflows/docker-build-push.yml
 backend/config/*.json
 frontend/dist/
 frontend/test-results/

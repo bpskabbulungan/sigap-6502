@@ -18,6 +18,7 @@ test("websocket connections target bare origin when API base has path", async (t
     setSocketFactory,
     resetSocketFactory,
   } = await import("../socket.js");
+  const { buildApiUrl } = await import("../apiClient.js");
 
   t.after(() => {
     closeSocket();
@@ -48,4 +49,8 @@ test("websocket connections target bare origin when API base has path", async (t
     transports: ["websocket", "polling"],
     autoConnect: true,
   });
+  assert.equal(
+    buildApiUrl("/api/system/qr.svg?v=test"),
+    "https://domain.example/app/api/system/qr.svg?v=test"
+  );
 });

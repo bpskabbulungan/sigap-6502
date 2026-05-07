@@ -1,0 +1,35 @@
+services:
+  backend:
+    container_name: sigap_backend
+    image: ghcr.io/${GHCR_OWNER:-bpskabbulungan}/sigap-6502-backend:${IMAGE_TAG:-latest}
+    pull_policy: always
+    env_file:
+      - ${BACKEND_ENV_FILE:-./backend/.env}
+    environment:
+      WEB_APP_URL: ${BACKEND_WEB_APP_URL:-http://localhost:3302}
+    ports:
+      - "3301:3301"
+    volumes:
+      - ./backend/storage:/app/storage
+      - ./backend/logs:/app/logs
+    restart: unless-stopped
+
+  frontend:
+    container_name: sigap_frontend
+    image: ghcr.io/${GHCR_OWNER:-bpskabbulungan}/sigap-6502-frontend:${IMAGE_TAG:-latest}
+    pull_policy: always
+    depends_on:
+      - backend
+    environment:
+      BACKEND_HOST: ${FRONTEND_BACKEND_HOST:-backend}
+      BACKEND_PORT: ${FRONTEND_BACKEND_PORT:-3301}
+    networks:
+      - default
+      - cf-tunnel
+    ports:
+      - "3302:80"
+    restart: unless-stopped
+
+networks:
+  cf-tunnel:
+    external: true

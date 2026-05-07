@@ -20,8 +20,14 @@ const rawBaseUrl =
   resolveDefaultBaseUrl();
 const API_BASE_URL = rawBaseUrl.replace(/\/$/, "");
 
+function buildApiUrl(path = "") {
+  if (!path) return API_BASE_URL;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+}
+
 async function apiRequest(path, options = {}) {
-  const url = `${API_BASE_URL}${path}`;
+  const url = buildApiUrl(path);
   const config = {
     method: options.method || "GET",
     credentials: "include",
@@ -74,4 +80,4 @@ async function apiRequest(path, options = {}) {
   return payload;
 }
 
-export { apiRequest, API_BASE_URL };
+export { apiRequest, API_BASE_URL, buildApiUrl };

@@ -3,6 +3,7 @@ import { Bot } from "lucide-react";
 import { useBotStart, useBotStatus, useBotStop } from "../queries/bot";
 import { useQr } from "../queries/system";
 import { QueryErrorNotice } from "./error/QueryErrorNotice";
+import { buildApiUrl } from "../lib/apiClient.js";
 import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
 import { Spinner } from "./ui/Spinner";
@@ -128,7 +129,7 @@ export function BotControlPanel() {
   const qrImageUrl = useMemo(() => {
     if (!qr) return "";
     const revision = buildQrRevision(qr);
-    return `/api/system/qr.svg?v=${revision}`;
+    return buildApiUrl(`/api/system/qr.svg?v=${revision}`);
   }, [qr]);
 
   const showQrInstructions =
