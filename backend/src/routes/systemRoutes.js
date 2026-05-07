@@ -50,7 +50,12 @@ router.get('/qr', requireAdmin, (req, res) => {
 
 router.get('/qr.svg', requireAdmin, async (req, res, next) => {
   try {
-    const qr = getQR();
+    const queryQr =
+      typeof req.query.data === 'string' && req.query.data.trim().length > 0
+        ? req.query.data
+        : null;
+    const qr = getQR() || queryQr;
+
     if (!qr) {
       return res.status(404).send('QR belum tersedia. Pastikan bot sedang menunggu pemindaian.');
     }

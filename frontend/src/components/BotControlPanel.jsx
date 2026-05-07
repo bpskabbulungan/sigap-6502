@@ -129,7 +129,8 @@ export function BotControlPanel() {
   const qrImageUrl = useMemo(() => {
     if (!qr) return "";
     const revision = buildQrRevision(qr);
-    return buildApiUrl(`/api/system/qr.svg?v=${revision}`);
+    const encodedQr = encodeURIComponent(qr);
+    return buildApiUrl(`/api/system/qr.svg?v=${revision}&data=${encodedQr}`);
   }, [qr]);
 
   const showQrInstructions =
