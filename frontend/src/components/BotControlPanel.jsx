@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot } from "lucide-react";
+import QRCode from "qrcode";
 import { useBotStart, useBotStatus, useBotStop } from "../queries/bot";
 import { useQr } from "../queries/system";
 import { QueryErrorNotice } from "./error/QueryErrorNotice";
-import { buildApiUrl } from "../lib/apiClient.js";
 import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
 import { Spinner } from "./ui/Spinner";
@@ -12,15 +12,6 @@ import { StatusPill } from "./StatusPill";
 import { useToast } from "./ui/ToastProvider.jsx";
 import { useConfirm } from "./ui/ConfirmProvider.jsx";
 
-function buildQrRevision(value) {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(index);
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36);
-}
-
 export function BotControlPanel() {
   const { data, isLoading, refetch: refetchStatus } = useBotStatus();
   const startMutation = useBotStart();
@@ -28,6 +19,7 @@ export function BotControlPanel() {
   const { data: qrData, isLoading: qrLoading } = useQr();
   const { add: addToast } = useToast();
   const { confirm } = useConfirm();
+  const [qrImageUrl, setQrImageUrl] = useState("");
 
   const starting = startMutation.isLoading;
   const stopping = stopMutation.isLoading;
@@ -126,11 +118,33 @@ export function BotControlPanel() {
     return "Memantau status WhatsApp...";
   }, [phase, qrLoading]);
 
-  const qrImageUrl = useMemo(() => {
-    if (!qr) return "";
-    const revision = buildQrRevision(qr);
-    const encodedQr = encodeURIComponent(qr);
-    return buildApiUrl(`/api/system/qr.svg?v=${revision}&data=${encodedQr}`);
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!qr) {
+      setQrImageUrl("");
+      return undefined;
+    }
+
+    QRCode.toDataURL(qr, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 280,
+    })
+      .then((url) => {
+        if (!cancelled) {
+          setQrImageUrl(url);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQrImageUrl("");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [qr]);
 
   const showQrInstructions =
@@ -234,7 +248,7 @@ export function BotControlPanel() {
               </p>
             </div>
 
-            {qr ? (
+            {qr && qrImageUrl ? (
               <div className="bot-panel-qr-layout flex flex-col items-start gap-3">
                 <img
                   src={qrImageUrl}
@@ -264,6 +278,11 @@ export function BotControlPanel() {
                     </span>
                   </div>
                 </div>
+              </div>
+            ) : qr ? (
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground sm:text-xs">
+                <Spinner size="sm" />
+                <span>Menyiapkan tampilan QR...</span>
               </div>
             ) : (
               <div
